@@ -84,4 +84,6 @@ jobs:
         run: |
           uv venv --clear --python 3.12
           uv pip install nox
-      - run: .venv/bin/nox -s lint types coverage pkg
+      # `docs` is included so a broken nav entry or link fails here rather
+      # than in the Read the Docs build.
+      - run: .venv/bin/nox -s lint types coverage pkg docs

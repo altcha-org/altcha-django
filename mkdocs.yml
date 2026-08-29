@@ -1,5 +1,8 @@
 site_name: altcha-django
 site_description: Django integration for ALTCHA — Widget v3, Proof-of-Work v2, and Sentinel
+# Read the Docs exports the real canonical URL at build time; the fallback keeps
+# `mkdocs serve` working locally.
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "http://localhost:8000/"]
 theme:
   name: material
   features: [content.code.copy, navigation.sections]
