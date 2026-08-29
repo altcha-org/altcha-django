@@ -1,0 +1,143 @@
+name: Publish
+
+# Builds the distributions, proves they are usable, then publishes to PyPI.
+#
+# Publishing uses PyPI Trusted Publishing (OIDC) — no API token is stored here.
+# One-time setup on PyPI: Manage project -> Publishing -> add a GitHub publisher
+#   owner: altcha-org   repository: altcha-django
+#   workflow: publish.yml   environment: pypi
+# Do the same on test.pypi.org with environment `testpypi` if you want the
+# manual dry run below.
+#
+# Normal flow: bump the version in pyproject.toml, then tag and push:
+#   git tag v1.0.0 && git push origin v1.0.0
+# The build job refuses to continue unless the tag matches the version in
+# pyproject.toml, so a forgotten version bump fails loudly instead of
+# re-uploading an already-published version.
+#
+# Only `vX.Y.Z` triggers a release. To also ship pre-releases, widen the filter
+# to `v[0-9]+.[0-9]+.[0-9]+*` — the version guard then requires a matching
+# pyproject version such as `1.1.0rc1`.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to publish
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+permissions: {}
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: |
+          uv venv --clear --python 3.12
+          uv pip install build twine check-wheel-contents
+          .venv/bin/python -m build
+
+      - name: Check the tag matches the packaged version
+        if: github.event_name == 'push'
+        run: |
+          version=$(.venv/bin/python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          echo "pyproject version: $version   tag: $tag"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match pyproject version '$version'. Bump the version, or retag."
+            exit 1
+          fi
+
+      - name: Check the distributions
+        run: |
+          .venv/bin/twine check dist/*
+          .venv/bin/check-wheel-contents dist
+
+      # The package is useless without the vendored widget bundle and the
+      # template, and neither is imported by Python — nothing else would catch
+      # them going missing from the wheel.
+      - name: Check the wheel ships its data files
+        run: |
+          .venv/bin/python - <<'PY'
+          import glob, sys, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          required = [
+              "altcha_django/static/altcha_django/altcha.min.js",
+              "altcha_django/static/altcha_django/i18n/all.js",
+              "altcha_django/templates/altcha_django/widget.html",
+              "altcha_django/py.typed",
+          ]
+          missing = [r for r in required if r not in names]
+          if missing:
+              sys.exit("missing from wheel:\n  " + "\n  ".join(missing))
+          print("all data files present")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # Install the built wheel into a clean environment and run the suite against
+  # it, so what gets published is what was tested — not the source tree.
+  verify-wheel:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Test the installed wheel
+        run: |
+          uv venv --clear --python 3.12
+          uv pip install "$(ls dist/*.whl)" pytest pytest-django pytest-asyncio \
+            djangorestframework httpx argon2-cffi
+          # `altcha_django` is not importable from the repo root, so this
+          # exercises the installed distribution rather than src/.
+          .venv/bin/python -c "import altcha_django, pathlib; \
+            assert 'site-packages' in altcha_django.__file__, altcha_django.__file__; \
+            print('testing', altcha_django.__file__)"
+          .venv/bin/pytest -q
+
+  publish:
+    needs: [build, verify-wheel]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || inputs.target }}
+      url: ${{ github.event_name == 'push' && 'https://pypi.org/p/altcha-django' || '' }}
+    permissions:
+      id-token: write # OIDC token for Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to TestPyPI
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+      - name: Publish to PyPI
+        if: github.event_name == 'push' || inputs.target == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1

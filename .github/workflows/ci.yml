@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Install into a uv-managed .venv rather than with `uv pip install --system`:
+# the runner's system interpreter is externally managed (PEP 668), which uv
+# refuses to install into. `uv venv --clear` is used because setup-uv may have
+# already created a .venv, and `uv venv` errors out on an existing one.
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        django: ["4.2", "5.0", "5.1", "5.2", "6.0", "6.1"]
+        # Keep in sync with DJANGO_PYTHONS in noxfile.py.
+        exclude:
+          # Django 4.2 / 5.0 support Python <= 3.12
+          - { python: "3.13", django: "4.2" }
+          - { python: "3.14", django: "4.2" }
+          - { python: "3.13", django: "5.0" }
+          - { python: "3.14", django: "5.0" }
+          # Django 5.1 supports Python <= 3.13
+          - { python: "3.14", django: "5.1" }
+          # Django 6.x requires Python >= 3.12
+          - { python: "3.10", django: "6.0" }
+          - { python: "3.11", django: "6.0" }
+          - { python: "3.10", django: "6.1" }
+          - { python: "3.11", django: "6.1" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Install
+        run: |
+          uv venv --clear --python ${{ matrix.python }}
+          uv pip install "django~=${{ matrix.django }}.0" -e ".[dev]"
+      - name: Test
+        run: .venv/bin/pytest -q
+
+  redis-replay:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install
+        run: |
+          uv venv --clear --python 3.12
+          uv pip install "django>=5.2" -e ".[dev]" redis
+      - name: Replay tests on Redis
+        env:
+          ALTCHA_TEST_REDIS_URL: redis://localhost:6379/0
+        run: .venv/bin/pytest -q tests/test_replay.py
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install nox
+        run: |
+          uv venv --clear --python 3.12
+          uv pip install nox
+      - run: .venv/bin/nox -s lint types coverage pkg

@@ -1,0 +1,22 @@
+site_name: altcha-django
+site_description: Django integration for ALTCHA — Widget v3, Proof-of-Work v2, and Sentinel
+theme:
+  name: material
+  features: [content.code.copy, navigation.sections]
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Quick start: quickstart.md
+  - Local verification: local-verification.md
+  - ALTCHA Sentinel: sentinel.md
+  - Widget options: widget-options.md
+  - Settings reference: settings.md
+  - Signals & stats: signals.md
+  - System checks: system-checks.md
+  - Django REST Framework: drf.md
+  - Testing: testing.md
+  - Migrating from django-altcha: migrating-from-django-altcha.md

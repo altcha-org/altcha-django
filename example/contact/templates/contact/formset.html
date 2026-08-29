@@ -1,0 +1,10 @@
+{% extends "contact/base.html" %}
+{% block content %}
+  <h1>Contact us (formset)</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    {% for form in formset %}<fieldset>{{ form.as_p }}</fieldset>{% endfor %}
+    <button type="submit">Send all</button>
+  </form>
+{% endblock %}
