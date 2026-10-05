@@ -9,4 +9,4 @@ class ContactSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
     email = serializers.EmailField()
     message = serializers.CharField()
-    altcha = AltchaField(bind_fields=["email"])
+    altcha = AltchaField(bind_fields=["message"])
