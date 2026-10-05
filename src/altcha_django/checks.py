@@ -155,6 +155,18 @@ def _check_session_binding(cls: type | None) -> list[CheckMessage]:
         )
         return errors
 
+    if not conf.REPLAY_PROTECTION:
+        errors.append(
+            Warning(
+                "ALTCHA_CHALLENGE_BIND_SESSION is on but replay protection is off; session "
+                "binding alone does not stop a solved challenge from being reused.",
+                id="altcha.W018",
+                hint="Removing the token from the session is not atomic, and with "
+                "signed-cookie sessions a client can resend its earlier cookie. Keep "
+                "ALTCHA_REPLAY_PROTECTION = True.",
+            )
+        )
+
     mode = conf.WIDGET_CHALLENGE_MODE
     if mode == "inline":
         errors.append(

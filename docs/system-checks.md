@@ -41,3 +41,4 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.W015` | challenge endpoint disabled while its URL is still wired (route 404s) |
 | `altcha.W016` | deterministic `max_number` below 1000 |
 | `altcha.W017` | replay on + `FileBasedCache` (`add()` is not atomic) |
+| `altcha.W018` | `CHALLENGE_BIND_SESSION` on with replay protection off (binding alone does not prevent reuse) |

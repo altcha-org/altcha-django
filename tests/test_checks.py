@@ -225,6 +225,16 @@ def test_w013_bind_session_has_no_effect_on_null_verifier():
     assert "altcha.W013" in ids(check_config(None))
 
 
+@override_settings(ALTCHA_CHALLENGE_BIND_SESSION=True, ALTCHA_REPLAY_PROTECTION=False)
+def test_w018_bind_session_without_replay_protection():
+    assert "altcha.W018" in ids(check_config(None))
+
+
+@override_settings(ALTCHA_CHALLENGE_BIND_SESSION=True)
+def test_w018_not_raised_with_replay_protection():
+    assert "altcha.W018" not in ids(check_config(None))
+
+
 # --- ALTCHA_WIDGET_DEFAULTS key validation (W014) ------------------------
 def test_w014_not_raised_for_valid_defaults():
     assert "altcha.W014" not in ids(check_config(None))

@@ -106,3 +106,15 @@ so it has three requirements — `manage.py check` enforces all of them:
 A verification that trips 2 or 3 fails with `code="misconfigured"` and an
 explanatory `result.error`, distinct from the `code="invalid_solution"` you get when
 a token genuinely does not belong to the session.
+
+Session binding ties a challenge to a session; it is **not** a replay control.
+Removing the token from the session is a read-modify-write that two concurrent
+submissions can both pass, and with signed-cookie sessions a client can resend
+the cookie it had before submitting. Keep `ALTCHA_REPLAY_PROTECTION` on (the
+default): the atomic claim on the challenge nonce then rejects any second use.
+`manage.py check` warns about binding without replay protection (`altcha.W018`).
+
+Tokens are kept in the session (up to 32). When several challenges are fetched
+at the same time for one session (several widgets on a page, or tabs), the
+session writes race and the last one wins, so one of those challenges is not
+recognised and fails with `invalid_solution`; the user solves a new one.
