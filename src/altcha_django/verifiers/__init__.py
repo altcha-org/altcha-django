@@ -18,7 +18,7 @@ from django.utils.module_loading import import_string
 
 from ..conf import conf
 from ..exceptions import AltchaConfigurationError
-from ..results import ErrorCode, VerificationResult
+from ..results import ErrorCode, PayloadType, VerificationResult
 from ..signals import altcha_replayed, altcha_verification_failed, altcha_verified
 from .base import BaseVerifier
 from .local import LocalVerifier
@@ -93,8 +93,16 @@ def resolve_verifier(verifier: Any = None) -> BaseVerifier:
 # Pipeline
 # --------------------------------------------------------------------------- #
 def _enforce_replay(result: VerificationResult, scope: str) -> VerificationResult:
-    if not result.verified or not result.replay_id:
+    if not result.verified or result.payload_type == PayloadType.TEST:
         return result
+    if not result.replay_id:
+        # Fail closed: a verified payload with nothing to claim could be reused forever.
+        return dataclasses.replace(
+            result,
+            verified=False,
+            code=ErrorCode.MALFORMED.value,
+            error="verified payload has no signed id; it cannot be protected against replay",
+        )
     from ..replay import ReplayProtector
 
     first_use = ReplayProtector().register(

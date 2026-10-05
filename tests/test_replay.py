@@ -54,6 +54,55 @@ def test_pipeline_replay_disabled():
     assert run_verification(payload).verified  # reuse allowed
 
 
+def _sentinel(**kw):
+    from altcha_django.verifiers import SentinelVerifier
+
+    kw.setdefault("challenge_url", "https://sentinel.example/v1/challenge?apiKey=key_1")
+    kw.setdefault("api_secret", factories.DEFAULT_SECRET)
+    kw.setdefault("verify_fields", False)
+    return SentinelVerifier(**kw)
+
+
+def test_signed_payload_without_id_fails_closed():
+    """A verified payload with nothing to claim would be reusable indefinitely."""
+    payload = factories.make_sentinel_payload(omit_id=True)
+    result = run_verification(payload, verifier=_sentinel())
+    assert not result.verified
+    assert result.code == ErrorCode.MALFORMED.value
+
+
+def test_remote_response_without_id_fails_closed():
+    import json
+
+    def post(url, data, headers, timeout):
+        body = {"verified": True, "verificationData": {"verified": True, "expire": 9999999999}}
+        return 200, json.dumps(body).encode()
+
+    payload = factories.make_sentinel_payload()
+    result = run_verification(payload, verifier=_sentinel(mode="remote", http_post=post))
+    assert not result.verified
+    assert result.code == ErrorCode.MALFORMED.value
+
+
+def test_custom_verifier_without_replay_id():
+    from altcha_django.results import VerificationResult
+    from altcha_django.verifiers import BaseVerifier
+
+    class NoId(BaseVerifier):
+        def verify(self, payload, *, request=None, form_data=None):
+            return VerificationResult.success()
+
+    assert run_verification("p", verifier=NoId()).code == ErrorCode.MALFORMED.value
+    # Without replay protection there is no claim to make, so nothing to fail.
+    assert run_verification("p", verifier=NoId(), replay=False).verified
+
+
+@override_settings(ALTCHA_VERIFIER="null")
+def test_null_verifier_is_exempt():
+    assert run_verification("anything").verified
+    assert run_verification("anything").verified
+
+
 @override_settings(ALTCHA_CACHE_ALIAS="shared")
 def test_uses_configured_cache_alias():
     from django.core.cache import caches

@@ -134,6 +134,7 @@ def make_sentinel_payload(
     extra=None,
     bad_signature=False,
     algorithm="SHA-256",
+    omit_id=False,
 ) -> str:
     verification_id = verification_id or secrets.token_hex(8)
     pairs: list[tuple[str, str]] = [
@@ -142,8 +143,9 @@ def make_sentinel_payload(
         ("classification", classification),
         ("expire", str(int(time.time()) + expire_in)),
         ("time", str(int(time.time()))),
-        ("id", verification_id),
     ]
+    if not omit_id:
+        pairs.append(("id", verification_id))
     if reasons:
         pairs.append(("reasons", ",".join(reasons)))
     if fields:
