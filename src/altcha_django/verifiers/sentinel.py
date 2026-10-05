@@ -17,6 +17,7 @@ Sentinel is **self-hosted**. Configuration is just two values:
 from __future__ import annotations
 
 import json
+import math
 import time
 import urllib.error
 import urllib.request
@@ -79,7 +80,7 @@ class SentinelVerifier(BaseVerifier):
         api_secret: str | None = None,
         verify_url: str | None = None,
         mode: str | None = None,
-        min_score: float | None = None,
+        max_score: float | None = None,
         reject_classifications: list[str] | None = None,
         verify_fields: bool | None = None,
         spamfilter: bool | None = None,
@@ -99,7 +100,7 @@ class SentinelVerifier(BaseVerifier):
             verify_url if verify_url is not None else conf.SENTINEL_VERIFY_URL
         )
         self.mode = (mode or conf.SENTINEL_MODE or "local").lower()
-        self.min_score = min_score if min_score is not None else conf.SENTINEL_MIN_SCORE
+        self.max_score = max_score if max_score is not None else conf.SENTINEL_MAX_SCORE
         self.reject = {
             str(c).upper()
             for c in (
@@ -287,7 +288,7 @@ class SentinelVerifier(BaseVerifier):
         duration_ms: float | None = None,
     ) -> VerificationResult:
         classification = vd.get("classification")
-        score = vd.get("score")
+        score = _score(vd.get("score"))
         expires_at = _effective_expiry(vd)
         common = {
             "payload_type": payload_type,
@@ -309,7 +310,9 @@ class SentinelVerifier(BaseVerifier):
             return VerificationResult.failure(ErrorCode.EXPIRED, **common)
         if classification and str(classification).upper() in self.reject:
             return VerificationResult.failure(ErrorCode.CLASSIFICATION_REJECTED, **common)
-        if self.min_score is not None and (score is None or score < self.min_score):
+        # Sentinel's score grows with spam likelihood (GOOD < 1 <= NEUTRAL < 2 <= BAD).
+        # An unparseable score cannot be shown to be under the limit: reject it.
+        if self.max_score is not None and (score is None or score > self.max_score):
             return VerificationResult.failure(ErrorCode.SCORE_REJECTED, **common)
 
         if self.verify_fields:
@@ -390,6 +393,23 @@ def _timestamp(value: object) -> int | None:
     """A positive int (as ``parse_verification_data`` yields for digits), else ``None``."""
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return value
+    return None
+
+
+def _score(value: object) -> float | None:
+    """The signed score as a finite float, or ``None`` if it is not a number.
+
+    ``parse_verification_data`` only converts ``\\d+`` / ``\\d+\\.\\d+``, so Sentinel's
+    ``String(score)`` of e.g. ``1e-7`` or ``-1`` arrives as text.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, str)):
+        try:
+            score = float(value)
+        except ValueError:
+            return None
+        return score if math.isfinite(score) else None
     return None
 
 

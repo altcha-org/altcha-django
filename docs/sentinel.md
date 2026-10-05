@@ -30,8 +30,13 @@ extra network call from your server.
 
 ```python
 ALTCHA_SENTINEL_REJECT_CLASSIFICATIONS = ["BAD"]   # default
-ALTCHA_SENTINEL_MIN_SCORE = None                    # e.g. 0.5 to also reject low scores
+ALTCHA_SENTINEL_MAX_SCORE = None                    # e.g. 1 to also reject NEUTRAL
 ```
+
+Sentinel's `score` rises with spam likelihood: `GOOD` below 1, `NEUTRAL` below 2,
+`BAD` from 2. `ALTCHA_SENTINEL_MAX_SCORE` (or `SentinelVerifier(max_score=...)`)
+rejects scores above the limit, and scores that are not a finite number.
+`result.score` is a `float`, or `None` if Sentinel's score was not numeric.
 
 Rejections surface as `code="classification_rejected"` / `code="score_rejected"`.
 

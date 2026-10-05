@@ -77,7 +77,7 @@ DEFAULTS: dict[str, Any] = {
     # challenge URL). Only used when SENTINEL_MODE == "remote".
     "SENTINEL_VERIFY_URL": None,
     "SENTINEL_MODE": "local",  # local | remote
-    "SENTINEL_MIN_SCORE": None,
+    "SENTINEL_MAX_SCORE": None,
     "SENTINEL_REJECT_CLASSIFICATIONS": ["BAD"],
     "SENTINEL_VERIFY_FIELDS": False,
     "SENTINEL_SPAMFILTER": False,

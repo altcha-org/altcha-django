@@ -121,7 +121,7 @@ ALTCHA_CACHE_ALIAS = "altcha"
 | `ALTCHA_SENTINEL_API_SECRET` | `None` | API key secret, for local signature verification |
 | `ALTCHA_SENTINEL_VERIFY_URL` | `None` | only for `mode="remote"`; derived from the challenge URL when unset |
 | `ALTCHA_SENTINEL_MODE` | `"local"` | `local` / `remote` |
-| `ALTCHA_SENTINEL_MIN_SCORE` | `None` |
+| `ALTCHA_SENTINEL_MAX_SCORE` | `None` — reject Sentinel scores above this (higher = more likely spam) |
 | `ALTCHA_SENTINEL_REJECT_CLASSIFICATIONS` | `["BAD"]` |
 | `ALTCHA_SENTINEL_VERIFY_FIELDS` | `False` — enforce `fieldsHash` for bound fields |
 | `ALTCHA_SENTINEL_SPAMFILTER` | `False` |

@@ -48,10 +48,34 @@ def test_classification_bad_rejected():
     assert result.classification == "BAD"
 
 
-def test_score_threshold():
-    payload = factories.make_sentinel_payload(SECRET, score=0.2)
-    result = make_verifier(min_score=0.5).verify(payload)
+@pytest.mark.parametrize(
+    ("score", "verified"),
+    [(0, True), (0.2, True), (1.5, True), ("1.5", True), (1.6, False), (5, False)],
+)
+def test_max_score_rejects_spammy_scores(score, verified):
+    """Sentinel's score rises with spam likelihood (GOOD < 1 <= NEUTRAL < 2 <= BAD)."""
+    payload = factories.make_sentinel_payload(SECRET, score=score)
+    result = make_verifier(max_score=1.5, reject_classifications=[]).verify(payload)
+    assert result.verified is verified
+    if not verified:
+        assert result.code == ErrorCode.SCORE_REJECTED.value
+
+
+@pytest.mark.parametrize("score", ["1e-7", "-1"])
+def test_score_in_other_number_formats_is_parsed(score):
+    """parse_verification_data leaves these as text; they are still numbers."""
+    payload = factories.make_sentinel_payload(SECRET, score=score)
+    result = make_verifier(max_score=0.5).verify(payload)
+    assert result.verified
+    assert result.score == float(score)
+
+
+@pytest.mark.parametrize("score", ["high", "nan", "inf", ""])
+def test_unparseable_score_is_rejected_when_limited(score):
+    payload = factories.make_sentinel_payload(SECRET, score=score)
+    result = make_verifier(max_score=0.5).verify(payload)
     assert result.code == ErrorCode.SCORE_REJECTED.value
+    assert make_verifier().verify(payload).verified  # no limit: score is informational
 
 
 def test_fields_hash_match():
