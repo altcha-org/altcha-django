@@ -151,11 +151,14 @@ class AppSettings:
 
         # legacy ALTCHA_CHALLENGE_EXPIRE (milliseconds)
         if name == "CHALLENGE":
-            merged = _deep_merge(copy.deepcopy(default), value if value is not _UNSET else {})
+            if value is not _UNSET and value is not None and not isinstance(value, dict):
+                # Not mergeable: return it as is so checks.E013 can report it and
+                # ChallengeConfig.from_settings refuses it, instead of crashing here.
+                return value
+            override = value if isinstance(value, dict) else {}
+            merged = _deep_merge(copy.deepcopy(default), override)
             legacy_ms = getattr(settings, PREFIX + "CHALLENGE_EXPIRE", None)
-            if legacy_ms is not None and (
-                value is _UNSET or "expires_seconds" not in (value or {})
-            ):
+            if legacy_ms is not None and "expires_seconds" not in override:
                 merged["expires_seconds"] = int(legacy_ms) // 1000
             return merged
 

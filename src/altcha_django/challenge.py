@@ -95,12 +95,17 @@ class ChallengeConfig:
     def from_settings(cls, **overrides: Any) -> ChallengeConfig:
         # An explicit None is a value, not "unset": max_number=None selects
         # probabilistic mode even when ALTCHA_CHALLENGE sets max_number.
-        data = {**conf.CHALLENGE, **overrides}
+        configured = conf.CHALLENGE
+        if not isinstance(configured, dict):
+            raise AltchaConfigurationError(
+                f"ALTCHA_CHALLENGE must be a dict; got {type(configured).__name__}."
+            )
+        data = {**configured, **overrides}
         known = {f.name for f in dataclasses.fields(cls)}
         unknown = set(data) - known
         if unknown:
             raise AltchaConfigurationError(
-                f"Unknown ALTCHA_CHALLENGE keys: {', '.join(sorted(unknown))}"
+                f"Unknown ALTCHA_CHALLENGE keys: {', '.join(sorted(map(str, unknown)))}"
             )
         return cls(**data)
 
@@ -122,7 +127,9 @@ class ChallengeConfig:
         no secret half of the derived key behind the published deterministic prefix.
         """
         found: list[tuple[str, str]] = []
-        if self.algorithm not in _KNOWN_ALGORITHMS:
+        # Unhashable values (a list, a dict) cannot be looked up in the tables below.
+        algorithm = self.algorithm if isinstance(self.algorithm, str) else None
+        if algorithm not in _KNOWN_ALGORITHMS:
             found.append(
                 (
                     "algorithm",
@@ -156,7 +163,7 @@ class ChallengeConfig:
                     "(or an empty prefix) in deterministic mode.",
                 )
             )
-        digest_size = _SHA_DIGEST_SIZES.get(self.algorithm)
+        digest_size = _SHA_DIGEST_SIZES.get(algorithm) if algorithm else None
         if key_length_ok and digest_size is not None and self.key_length > digest_size:
             found.append(
                 (

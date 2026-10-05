@@ -375,7 +375,8 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
             )
         )
 
-    challenge = conf.CHALLENGE
+    # A non-dict ALTCHA_CHALLENGE is reported by altcha.E013.
+    challenge = conf.CHALLENGE if isinstance(conf.CHALLENGE, dict) else {}
     if str(challenge.get("algorithm", "")).upper() == "ARGON2ID":
         try:
             import argon2  # noqa: F401

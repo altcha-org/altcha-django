@@ -181,6 +181,25 @@ def test_e015_not_raised_without_removed_settings():
     assert "altcha.E015" not in ids(check_config(None))
 
 
+@pytest.mark.parametrize(
+    ("challenge", "check_id"),
+    [
+        ({"algorithm": ["SHA-256"]}, "altcha.E009"),
+        ({"algorithm": {"name": "SHA-256"}}, "altcha.E009"),
+        ({"algorithm": ["SHA-256"], "key_length": 64, "max_number": 1000}, "altcha.E009"),
+        ({1: 2}, "altcha.E013"),
+        ({None: 1, "nonsense": 2}, "altcha.E013"),
+        ([1], "altcha.E013"),
+        ("PBKDF2/SHA-256", "altcha.E013"),
+        (5, "altcha.E013"),
+    ],
+)
+def test_odd_challenge_settings_are_reported_not_raised(challenge, check_id):
+    """`manage.py check` must report a malformed ALTCHA_CHALLENGE, not crash on it."""
+    with override_settings(ALTCHA_CHALLENGE=challenge):
+        assert check_id in ids(check_config(None))
+
+
 @override_settings(ALTCHA_WIDGET_CHALLENGE_MODE="endpoint")
 def test_w009_only_when_url_missing():
     # tests.urls DOES wire the endpoint, so W009 must NOT fire here
