@@ -157,7 +157,8 @@ def make_sentinel_payload(
     if fields:
         pairs.append(("fields", ",".join(fields)))
         joined = "\n".join(str((field_values or {}).get(name, "")) for name in fields)
-        pairs.append(("fieldsHash", _digest(algorithm)(joined.encode()).hexdigest()))
+        # Sentinel hashes fields with SHA-256 regardless of the signature `algorithm`.
+        pairs.append(("fieldsHash", hashlib.sha256(joined.encode()).hexdigest()))
     for key, value in (extra or {}).items():
         pairs.append((key, str(value)))
 

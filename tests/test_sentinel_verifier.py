@@ -253,23 +253,18 @@ def test_remote_verdict_with_data_is_unverified():
     assert v.verify(factories.make_sentinel_payload(SECRET)).code == ErrorCode.UNVERIFIED.value
 
 
-# --- fieldsHash digest follows the payload -------------------------------
-def test_fields_hash_uses_the_algorithm_named_by_the_payload():
-    """Sentinel names its digest in the payload; SHA-512 must verify as SHA-512."""
+# --- fieldsHash is always SHA-256 ------------------------------------------
+@pytest.mark.parametrize("algorithm", ["SHA-1", "SHA-256", "SHA-384", "SHA-512"])
+def test_fields_hash_is_sha256_whatever_the_signature_algorithm(algorithm):
+    """Sentinel signs v1 payloads with the challenge's SHA-* but always hashes fields
+    with SHA-256; the payload's algorithm must not select the fieldsHash digest."""
     payload = factories.make_sentinel_payload(
-        SECRET, fields=["email"], field_values={"email": "a@b.com"}, algorithm="SHA-512"
+        SECRET, fields=["email"], field_values={"email": "a@b.com"}, algorithm=algorithm
     )
-    result = make_verifier(verify_fields=True).verify(payload, form_data={"email": "a@b.com"})
-    assert result.verified, result.error
-
-
-def test_fields_hash_mismatch_under_a_non_default_algorithm():
-    payload = factories.make_sentinel_payload(
-        SECRET, fields=["email"], field_values={"email": "a@b.com"}, algorithm="SHA-512"
-    )
-    result = make_verifier(verify_fields=True).verify(payload, form_data={"email": "evil@x.com"})
-    assert not result.verified
-    assert result.code == ErrorCode.FIELDS_HASH_MISMATCH.value
+    v = make_verifier(verify_fields=True)
+    assert v.verify(payload, form_data={"email": "a@b.com"}).verified
+    tampered = v.verify(payload, form_data={"email": "evil@x.com"})
+    assert tampered.code == ErrorCode.FIELDS_HASH_MISMATCH.value
 
 
 def test_hostile_payload_algorithm_is_rejected_not_raised():

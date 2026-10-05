@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from altcha import (
@@ -39,14 +39,6 @@ from .local import decode_payload, is_server_signature_shape
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
-
-#: Digests altcha.verify_fields_hash accepts for the Sentinel fieldsHash.
-_HASH_ALGORITHMS = ("SHA-1", "SHA-256", "SHA-512")
-
-
-def _algo(value: str) -> Any:
-    """Narrow a validated digest name to the library's AlgoType literal."""
-    return cast('Literal["SHA-1", "SHA-256", "SHA-512"]', value)
 
 
 def _default_http_get(url: str, headers: dict[str, str], timeout: float) -> tuple[int, bytes]:
@@ -193,20 +185,17 @@ class SentinelVerifier(BaseVerifier):
                 "(is the widget pointed at Sentinel?)",
             )
 
-        # The payload names the digest used for its own hashes (default SHA-256).
-        hash_algorithm = str(decoded.get("algorithm") or "SHA-256").upper()
         # Covered by the signature, but only trustworthy once that has been checked.
         replay_id = _signed_id(decoded.get("verificationData"))
         if self.mode == "remote":
-            return self._verify_remote(payload, form_data, hash_algorithm, replay_id)
-        return self._verify_local(payload, form_data, hash_algorithm, replay_id)
+            return self._verify_remote(payload, form_data, replay_id)
+        return self._verify_local(payload, form_data, replay_id)
 
     # -- local mode -----------------------------------------------------
     def _verify_local(
         self,
         payload: str,
         form_data: Mapping[str, Any] | None,
-        hash_algorithm: str,
         replay_id: str | None,
     ) -> VerificationResult:
         if not self.api_secret:
@@ -234,7 +223,6 @@ class SentinelVerifier(BaseVerifier):
             PayloadType.SERVER_SIGNATURE,
             replay_id=replay_id,
             duration_ms=result.time,
-            hash_algorithm=hash_algorithm,
         )
 
     # -- remote mode ------------------------------------------------
@@ -242,7 +230,6 @@ class SentinelVerifier(BaseVerifier):
         self,
         payload: str,
         form_data: Mapping[str, Any] | None,
-        hash_algorithm: str,
         replay_id: str | None,
     ) -> VerificationResult:
         result = verify_server(
@@ -276,7 +263,6 @@ class SentinelVerifier(BaseVerifier):
             form_data,
             PayloadType.SENTINEL_REMOTE,
             replay_id=replay_id,
-            hash_algorithm=hash_algorithm,
         )
 
     # -- shared policy / success --------------------------------------
@@ -288,7 +274,6 @@ class SentinelVerifier(BaseVerifier):
         *,
         replay_id: str | None,
         duration_ms: float | None = None,
-        hash_algorithm: str = "SHA-256",
     ) -> VerificationResult:
         classification = vd.get("classification")
         score = vd.get("score")
@@ -317,7 +302,7 @@ class SentinelVerifier(BaseVerifier):
             return VerificationResult.failure(ErrorCode.SCORE_REJECTED, **common)
 
         if self.verify_fields:
-            error = self._fields_binding_error(vd, form_data, hash_algorithm)
+            error = self._fields_binding_error(vd, form_data)
             if error is not None:
                 return VerificationResult.failure(
                     ErrorCode.FIELDS_HASH_MISMATCH, error=error, **common
@@ -326,7 +311,7 @@ class SentinelVerifier(BaseVerifier):
         return VerificationResult.success(**common)
 
     def _fields_binding_error(
-        self, vd: Mapping[str, Any], form_data: Mapping[str, Any] | None, hash_algorithm: str
+        self, vd: Mapping[str, Any], form_data: Mapping[str, Any] | None
     ) -> str | None:
         """Why the submitted fields are not the ones Sentinel classified, or ``None``.
 
@@ -354,8 +339,9 @@ class SentinelVerifier(BaseVerifier):
         if not fields_hash:
             return None
         values = {name: str(form_data.get(name, "")) for name in fields}
-        algorithm = hash_algorithm if hash_algorithm in _HASH_ALGORITHMS else "SHA-256"
-        if not verify_fields_hash(values, fields, str(fields_hash), _algo(algorithm)):
+        # Sentinel always hashes field values with SHA-256, whatever digest signed the
+        # payload; the payload's unsigned ``algorithm`` must not select it.
+        if not verify_fields_hash(values, fields, str(fields_hash), "SHA-256"):
             return "fieldsHash does not match the submitted values"
         return None
 
