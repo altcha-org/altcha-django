@@ -19,13 +19,13 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.E011` | `CHALLENGE_BIND_SESSION` on without `django.contrib.sessions` + `SessionMiddleware` |
 | `altcha.E012` | `ALTCHA_TRUSTED_PROXIES` has entries that are not valid IPs/CIDRs |
 | `altcha.E013` | other invalid `ALTCHA_CHALLENGE` values: unknown keys, non-integer or non-positive numbers, `key_length` below 16, or above the digest size for `SHA-256`/`384`/`512` |
+| `altcha.E014` | replay on + `DummyCache` (stores nothing, every payload reusable) |
 
 ## Warnings
 
 | id | condition |
 |---|---|
 | `altcha.W001` | replay on + `LocMemCache` (per-process) |
-| `altcha.W002` | replay on + `DummyCache` (no-op) |
 | `altcha.W003` | replay protection disabled |
 | `altcha.W004` | test mode on with `DEBUG=False` (deploy check) |
 | `altcha.W005` | `ARGON2ID` without `argon2-cffi` |
@@ -40,3 +40,4 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.W014` | `ALTCHA_WIDGET_DEFAULTS` has keys that are not `<altcha-widget>` attributes |
 | `altcha.W015` | challenge endpoint disabled while its URL is still wired (route 404s) |
 | `altcha.W016` | deterministic `max_number` below 1000 |
+| `altcha.W017` | replay on + `FileBasedCache` (`add()` is not atomic) |

@@ -118,8 +118,27 @@ def test_w001_locmem_replay_warning():
 
 
 @override_settings(ALTCHA_CACHE_ALIAS="dummy")
-def test_w002_dummy_cache():
-    assert "altcha.W002" in ids(check_config(None))
+def test_e014_dummy_cache_with_replay_on():
+    assert "altcha.E014" in ids(check_config(None))
+
+
+@override_settings(ALTCHA_CACHE_ALIAS="dummy", ALTCHA_REPLAY_PROTECTION=False)
+def test_e014_not_raised_when_replay_is_off():
+    assert "altcha.E014" not in ids(check_config(None))
+
+
+def test_w017_filebased_cache(tmp_path, settings):
+    settings.CACHES = {
+        **settings.CACHES,
+        "files": {
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION": str(tmp_path),
+        },
+    }
+    settings.ALTCHA_CACHE_ALIAS = "files"
+    found = ids(check_config(None))
+    assert "altcha.W017" in found
+    assert "altcha.W001" not in found
 
 
 @override_settings(ALTCHA_REPLAY_PROTECTION=False)

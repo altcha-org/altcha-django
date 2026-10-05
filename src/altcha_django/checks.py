@@ -39,6 +39,42 @@ def _altcha_version() -> tuple[int, ...] | None:
     return tuple(parts)
 
 
+def _check_replay_cache(cache_backend: object) -> list[CheckMessage]:
+    """Backends that cannot hold single-use claims reliably across requests."""
+    from django.core.cache.backends.dummy import DummyCache
+    from django.core.cache.backends.filebased import FileBasedCache
+    from django.core.cache.backends.locmem import LocMemCache
+
+    if isinstance(cache_backend, DummyCache):
+        return [
+            Error(
+                "Replay protection is enabled but ALTCHA_CACHE_ALIAS uses DummyCache, "
+                "which stores nothing: every solved payload can be reused.",
+                id="altcha.E014",
+                hint="Point ALTCHA_CACHE_ALIAS at a real shared cache, or set "
+                "ALTCHA_REPLAY_PROTECTION = False to accept reuse explicitly.",
+            )
+        ]
+    if isinstance(cache_backend, LocMemCache):
+        return [
+            Warning(
+                "Replay protection uses LocMemCache, which is per-process.",
+                id="altcha.W001",
+                hint="Use a shared cache (Redis/Memcached/DB) for multi-worker deployments.",
+            )
+        ]
+    if isinstance(cache_backend, FileBasedCache):
+        return [
+            Warning(
+                "Replay protection uses FileBasedCache, whose add() is check-then-set: "
+                "concurrent submissions of one payload can both be accepted.",
+                id="altcha.W017",
+                hint="Use Redis, Memcached or the database cache for ALTCHA_CACHE_ALIAS.",
+            )
+        ]
+    return []
+
+
 def _verifier_class() -> type | None:
     from .verifiers import _load_class
 
@@ -318,22 +354,7 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
 
     # --- warnings ---------------------------------------------------
     if conf.REPLAY_PROTECTION and cache_backend is not None:
-        backend_path = type(cache_backend).__module__
-        if backend_path.endswith("locmem"):
-            errors.append(
-                Warning(
-                    "Replay protection uses LocMemCache, which is per-process.",
-                    id="altcha.W001",
-                    hint="Use a shared cache (Redis/Memcached/DB) for multi-worker deployments.",
-                )
-            )
-        elif backend_path.endswith("dummy"):
-            errors.append(
-                Warning(
-                    "Replay protection is a no-op with DummyCache.",
-                    id="altcha.W002",
-                )
-            )
+        errors.extend(_check_replay_cache(cache_backend))
     if not conf.REPLAY_PROTECTION:
         errors.append(
             Warning(

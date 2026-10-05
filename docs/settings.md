@@ -70,6 +70,37 @@ treated as expiring `ALTCHA_REPLAY_FALLBACK_TTL` seconds after their signed
 `time`, so they cannot be accepted again once their replay entry is gone. A
 payload with neither field fails as `malformed`.
 
+### Choosing the cache
+
+A replay entry that disappears before the payload expires lets that payload be
+accepted again, so the cache behind `ALTCHA_CACHE_ALIAS` must be shared by all
+workers, claim atomically, and not evict entries early. Rate-limit buckets
+(one key per client IP per window) and stats counters are written to the same
+alias.
+
+| Backend | Suitable | Notes |
+|---|---|---|
+| Redis | yes | Use a dedicated instance/db with `maxmemory-policy` `noeviction` or `volatile-*`; `allkeys-*` policies can evict replay entries under memory pressure. |
+| Database | yes | Raise `OPTIONS["MAX_ENTRIES"]` well above the number of submissions accepted per `expires_seconds` window; past the default (300) it drops expired entries and then a third of the rest. |
+| Memcached | with care | Evicts least-recently-used items when full; size it so it never fills. |
+| LocMem | single process only | Per-process, culls at `MAX_ENTRIES` (`altcha.W001`). |
+| FileBased | no | `add()` is check-then-set, so concurrent replays can both pass (`altcha.W017`). |
+| Dummy | no | Stores nothing; refused while replay protection is on (`altcha.E014`). |
+
+A dedicated alias keeps other application data from crowding out replay entries:
+
+```python
+CACHES = {
+    "default": {...},
+    "altcha": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "altcha_cache",
+        "OPTIONS": {"MAX_ENTRIES": 1_000_000},
+    },
+}
+ALTCHA_CACHE_ALIAS = "altcha"
+```
+
 ## Widget
 
 | Setting | Default |
