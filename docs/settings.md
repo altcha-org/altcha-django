@@ -58,7 +58,7 @@ buckets. Invalid entries are reported by `altcha.E012`.
 | `ALTCHA_REPLAY_CLOCK_SKEW` | `30` |
 
 With replay protection on, every verified payload is claimed once in the cache
-(`cache.add`) under its signed id: the challenge id or nonce for local
+(`cache.add`) under its signed id: the challenge `nonce` for local
 verification, `verificationData.id` for Sentinel. A payload that verifies but
 carries no such id fails as `malformed`, since nothing would stop it from being
 reused. Custom verifiers must therefore set `VerificationResult.replay_id` on

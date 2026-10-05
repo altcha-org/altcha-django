@@ -222,7 +222,7 @@ def build_challenge(
 
     ``data`` is embedded verbatim into ``challenge.parameters.data``. When
     ``bind_session_token`` is true a random ``id`` is added to ``data``
-    (used by the challenge view for session binding and as the replay id). Pass an
+    (used by the challenge view for session binding; the replay id is the nonce). Pass an
     explicit ``counter`` to force deterministic mode with that exact value.
     """
     cfg = config or get_challenge_config(**config_overrides)

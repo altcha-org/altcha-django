@@ -81,9 +81,27 @@ def test_missing_secret_is_misconfigured():
     assert result.code == ErrorCode.MISCONFIGURED.value
 
 
-def test_replay_id_prefers_challenge_id_from_data():
-    payload = factories.make_pow_payload(SECRET, data={"id": "fixed-id"})
-    assert verify(payload).replay_id == "fixed-id"
+def test_shared_data_id_does_not_make_distinct_challenges_replays():
+    """data.id is integrator-controlled; the replay id is the per-challenge nonce."""
+    from altcha_django.verifiers import run_verification
+
+    v = LocalVerifier(hmac_secret=SECRET)
+    for _ in range(2):
+        payload = factories.make_pow_payload(SECRET, data={"id": "fixed-id"})
+        assert run_verification(payload, verifier=v).verified
+    assert run_verification(payload, verifier=v).code == ErrorCode.REPLAYED.value
+
+
+def test_session_bound_payload_cannot_be_reused():
+    """Replay is keyed on the nonce; the consumed session token blocks reuse too."""
+    from altcha_django.verifiers import run_verification
+
+    v = LocalVerifier(hmac_secret=SECRET, bind_session=True)
+    payload = factories.make_pow_payload(SECRET, data={"id": "tok-r"})
+    req = _FakeRequest(["tok-r"])
+    assert run_verification(payload, verifier=v, request=req).verified
+    req.session["altcha_challenges"].append("tok-r")  # token re-issued; nonce still claimed
+    assert run_verification(payload, verifier=v, request=req).code == ErrorCode.REPLAYED.value
 
 
 @override_settings(ALTCHA_VERIFIER="local")
