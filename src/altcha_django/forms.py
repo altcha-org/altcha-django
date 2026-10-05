@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 else:
     _MixinBase = object
 
-from .results import ErrorCode, VerificationResult
+from .results import BoundFormData, ErrorCode, VerificationResult
 from .verifiers import run_verification
 from .widgets import AltchaWidget
 
@@ -113,14 +113,15 @@ class AltchaField(forms.Field):
         self._request = request
         self._form = form
 
-    def _collect_form_data(self) -> dict[str, Any] | None:
+    def _collect_form_data(self) -> BoundFormData | None:
         if not self.bind_form_fields or self._form is None:
             return None
         data = getattr(self._form, "data", None)
         if data is None:
             return None
+        # The widget reports fields by their HTML name, which includes the form prefix.
         add_prefix = getattr(self._form, "add_prefix", lambda n: n)
-        return {name: data.get(add_prefix(name), "") for name in self.bind_form_fields}
+        return BoundFormData([add_prefix(name) for name in self.bind_form_fields], data)
 
     # -- validation --------------------------------------------------
     def to_python(self, value: Any) -> str:

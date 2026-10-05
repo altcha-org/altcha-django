@@ -5,7 +5,13 @@ from __future__ import annotations
 from .challenge import ChallengeConfig, build_challenge, get_challenge_config
 from .exceptions import AltchaBackendError, AltchaConfigurationError, AltchaError
 from .forms import AltchaField, AltchaMixin, AltchaModelFormMixin
-from .results import Classification, ErrorCode, PayloadType, VerificationResult
+from .results import (
+    BoundFormData,
+    Classification,
+    ErrorCode,
+    PayloadType,
+    VerificationResult,
+)
 from .signals import altcha_replayed, altcha_verification_failed, altcha_verified
 from .verifiers import (
     BaseVerifier,
@@ -33,6 +39,7 @@ __all__ = [
     "PayloadType",
     "Classification",
     "ErrorCode",
+    "BoundFormData",
     # verifiers
     "BaseVerifier",
     "LocalVerifier",

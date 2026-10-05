@@ -67,6 +67,11 @@ covers a value changed after verification, and a payload obtained without sendin
 the field for classification at all (no `fieldsHash`, or the field missing from
 `fields`). Empty bound fields are exempt, as the widget never sends them.
 
+List fields by their form field name; with a form `prefix`, the prefixed HTML
+name (`contact-message`) is matched against Sentinel's `fields` automatically.
+Text inputs the widget hashed but that are not bound still count toward the hash,
+so changing any of them after verification also fails.
+
 The widget only collects `<input type="text">` and `<textarea>` elements with a
 value and without `data-no-spamfilter`. Bind only fields rendered that way:
 an `EmailField` renders `type="email"`, is never classified, and would fail every

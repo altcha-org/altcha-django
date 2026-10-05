@@ -33,7 +33,7 @@ from altcha import (
 
 from ..conf import conf
 from ..exceptions import AltchaConfigurationError
-from ..results import ErrorCode, PayloadType, VerificationResult
+from ..results import BoundFormData, ErrorCode, PayloadType, VerificationResult
 from .base import BaseVerifier
 from .local import decode_payload, is_server_signature_shape
 
@@ -338,7 +338,9 @@ class SentinelVerifier(BaseVerifier):
             return f"bound fields missing from the signed fields: {', '.join(unsigned)}"
         if not fields_hash:
             return None
-        values = {name: str(form_data.get(name, "")) for name in fields}
+        # The widget hashes every non-empty text input, bound or not, by HTML name.
+        lookup = form_data.value if isinstance(form_data, BoundFormData) else form_data.get
+        values = {name: _text(lookup(name)) for name in fields}
         # Sentinel always hashes field values with SHA-256, whatever digest signed the
         # payload; the payload's unsigned ``algorithm`` must not select it.
         if not verify_fields_hash(values, fields, str(fields_hash), "SHA-256"):
@@ -354,6 +356,10 @@ def _resolve_callable(value: str | Callable[..., Any] | None) -> Callable[..., A
 
     resolved: Callable[..., Any] = import_string(value)
     return resolved
+
+
+def _text(value: object) -> str:
+    return "" if value is None else str(value)
 
 
 def _signed_id(verification_data: object) -> str | None:

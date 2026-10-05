@@ -58,6 +58,20 @@ def test_sentinel_fields_hash(settings):
     assert s.is_valid(), s.errors
 
 
+def test_sentinel_fields_hash_includes_unbound_submitted_field(settings):
+    settings.ALTCHA_VERIFIER = "sentinel"
+    settings.ALTCHA_SENTINEL_CHALLENGE_URL = "https://s.example.com/v1/challenge?apiKey=k"
+    settings.ALTCHA_SENTINEL_API_SECRET = "secret"
+    settings.ALTCHA_SENTINEL_VERIFY_FIELDS = True
+
+    values = {"email": "a@b.com", "name": "Bob"}
+    payload = factories.make_sentinel_payload("secret", fields=list(values), field_values=values)
+    assert ContactSerializer(data={**values, "altcha": payload}).is_valid()
+    s = ContactSerializer(data={**values, "name": "Mallory", "altcha": payload})
+    assert not s.is_valid()
+    assert s.errors["altcha"][0].code == ErrorCode.FIELDS_HASH_MISMATCH.value
+
+
 def test_return_result_option():
     class S(serializers.Serializer):
         altcha = AltchaField(return_result=True)

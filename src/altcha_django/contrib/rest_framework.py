@@ -26,7 +26,7 @@ except ImportError as exc:  # pragma: no cover - optional dependency
     ) from exc
 
 from ..forms import AltchaField as _FormField
-from ..results import ErrorCode, VerificationResult
+from ..results import BoundFormData, ErrorCode, VerificationResult
 from ..verifiers import run_averification, run_verification
 
 
@@ -64,11 +64,11 @@ class AltchaField(serializers.CharField):
     def _request(self) -> Any:
         return (self.context or {}).get("request")
 
-    def _form_data(self) -> dict[str, Any] | None:
+    def _form_data(self) -> BoundFormData | None:
         if not self.bind_fields:
             return None
         source = getattr(self.parent, "initial_data", {}) or {}
-        return {name: source.get(name, "") for name in self.bind_fields}
+        return BoundFormData(self.bind_fields, source)
 
     # -- DRF hooks --------------------------------------------------
     def to_internal_value(self, data: Any) -> Any:

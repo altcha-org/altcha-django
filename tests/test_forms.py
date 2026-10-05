@@ -157,3 +157,50 @@ def test_bind_form_fields_feeds_sentinel(settings):
     )
     assert not bad.is_valid()
     assert bad.errors["captcha"].as_data()[0].code == ErrorCode.FIELDS_HASH_MISMATCH.value
+
+
+class _MessageForm(AltchaMixin, forms.Form):
+    message = forms.CharField()
+    name = forms.CharField(required=False)
+    captcha = AltchaField(bind_form_fields=["message"])
+
+
+def _sentinel_settings(settings):
+    settings.ALTCHA_VERIFIER = "sentinel"
+    settings.ALTCHA_SENTINEL_CHALLENGE_URL = "https://s.example.com/v1/challenge?apiKey=k"
+    settings.ALTCHA_SENTINEL_API_SECRET = "secret"
+    settings.ALTCHA_SENTINEL_VERIFY_FIELDS = True
+
+
+def _signed(values):
+    return factories.make_sentinel_payload("secret", fields=list(values), field_values=values)
+
+
+@pytest.mark.parametrize(
+    ("posted", "code"),
+    [({"c-message": "hello"}, None), ({"c-message": "spam"}, ErrorCode.FIELDS_HASH_MISMATCH)],
+)
+def test_bind_form_fields_on_prefixed_form(settings, posted, code):
+    """The widget reports prefixed HTML names; binding must use them too."""
+    _sentinel_settings(settings)
+    form = _MessageForm({**posted, "c-captcha": _signed({"c-message": "hello"})}, prefix="c")
+    if code is None:
+        assert form.is_valid(), form.errors
+    else:
+        assert not form.is_valid()
+        assert form.errors["captcha"].as_data()[0].code == code.value
+
+
+@pytest.mark.parametrize(
+    ("posted_name", "code"), [("Bob", None), ("Mallory", ErrorCode.FIELDS_HASH_MISMATCH)]
+)
+def test_unbound_text_input_hashed_by_widget(settings, posted_name, code):
+    """The widget hashes every non-empty text input; unbound ones count toward the hash."""
+    _sentinel_settings(settings)
+    payload = _signed({"message": "hello", "name": "Bob"})
+    form = _MessageForm({"message": "hello", "name": posted_name, "captcha": payload})
+    if code is None:
+        assert form.is_valid(), form.errors
+    else:
+        assert not form.is_valid()
+        assert form.errors["captcha"].as_data()[0].code == code.value

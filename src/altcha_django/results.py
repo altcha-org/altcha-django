@@ -7,7 +7,9 @@ the verifier layer can be reused from DRF, management commands, Celery tasks, et
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Iterable, Iterator, Mapping
 from enum import Enum
+from typing import Any
 
 
 class PayloadType(str, Enum):
@@ -92,3 +94,32 @@ class VerificationResult:
     def ok(self) -> bool:
         """Alias for :attr:`verified`, for readability at call sites."""
         return self.verified
+
+
+class BoundFormData(Mapping[str, Any]):
+    """The fields an ``AltchaField`` binds, keyed by HTML ``name`` (form prefix
+    included, as the widget reports them to Sentinel).
+
+    As a mapping it holds only the bound fields: those are the ones whose values
+    must be covered by Sentinel's ``fieldsHash``. :meth:`value` reads any field of
+    the submission, because the widget also hashes text inputs that are not bound.
+    """
+
+    __slots__ = ("_bound", "_submitted")
+
+    def __init__(self, names: Iterable[str], submitted: Mapping[str, Any]) -> None:
+        self._submitted = submitted
+        self._bound = {name: submitted.get(name, "") for name in names}
+
+    def __getitem__(self, name: str) -> Any:
+        return self._bound[name]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._bound)
+
+    def __len__(self) -> int:
+        return len(self._bound)
+
+    def value(self, name: str) -> Any:
+        """The submitted value of ``name`` (bound or not), ``""`` if absent."""
+        return self._submitted.get(name, "")
