@@ -70,7 +70,8 @@ jobs:
       - name: Replay tests on Redis
         env:
           ALTCHA_TEST_REDIS_URL: redis://localhost:6379/0
-        run: .venv/bin/pytest -q tests/test_replay.py
+        # No -q: the report header names the cache backend the claims ran on.
+        run: .venv/bin/pytest tests/test_replay.py
 
   quality:
     runs-on: ubuntu-latest
