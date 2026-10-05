@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "altcha-django"
-version = "1.0.0"
+version = "1.1.0"
 description = "Django integration for ALTCHA — Widget v3, Proof-of-Work v2, and Sentinel."
 readme = "README.md"
 requires-python = ">=3.10"
