@@ -186,18 +186,19 @@ class SentinelVerifier(BaseVerifier):
                 "(is the widget pointed at Sentinel?)",
             )
 
-        # Covered by the signature, but only trustworthy once that has been checked.
-        replay_id = _signed_id(decoded.get("verificationData"))
+        # Covered by the signature, but only trustworthy once that has been checked;
+        # _finish reads the replay id and field binding from it verbatim.
+        signed = decoded.get("verificationData")
         if self.mode == "remote":
-            return self._verify_remote(payload, form_data, replay_id)
-        return self._verify_local(payload, form_data, replay_id)
+            return self._verify_remote(payload, form_data, signed)
+        return self._verify_local(payload, form_data, signed)
 
     # -- local mode -----------------------------------------------------
     def _verify_local(
         self,
         payload: str,
         form_data: Mapping[str, Any] | None,
-        replay_id: str | None,
+        signed: object,
     ) -> VerificationResult:
         if not self.api_secret:
             return VerificationResult.failure(
@@ -222,7 +223,7 @@ class SentinelVerifier(BaseVerifier):
             result.verification_data or {},
             form_data,
             PayloadType.SERVER_SIGNATURE,
-            replay_id=replay_id,
+            signed=signed,
             duration_ms=result.time,
         )
 
@@ -231,7 +232,7 @@ class SentinelVerifier(BaseVerifier):
         self,
         payload: str,
         form_data: Mapping[str, Any] | None,
-        replay_id: str | None,
+        signed: object,
     ) -> VerificationResult:
         try:
             result = verify_server(
@@ -259,8 +260,8 @@ class SentinelVerifier(BaseVerifier):
             return VerificationResult.failure(
                 code, error=reason, payload_type=PayloadType.SENTINEL_REMOTE
             )
-        # Sentinel has verified the submitted payload's signature, so its signed id is
-        # authoritative; the response's verificationData was already type-coerced.
+        # Sentinel has verified the submitted payload's signature, so its signed
+        # string is authoritative; the response's verificationData is type-coerced.
         vd = result.verification_data
         if isinstance(vd, str):
             vd = parse_verification_data(vd)
@@ -274,7 +275,7 @@ class SentinelVerifier(BaseVerifier):
             vd,
             form_data,
             PayloadType.SENTINEL_REMOTE,
-            replay_id=replay_id,
+            signed=signed,
         )
 
     # -- shared policy / success --------------------------------------
@@ -284,7 +285,7 @@ class SentinelVerifier(BaseVerifier):
         form_data: Mapping[str, Any] | None,
         payload_type: PayloadType,
         *,
-        replay_id: str | None,
+        signed: object,
         duration_ms: float | None = None,
     ) -> VerificationResult:
         classification = vd.get("classification")
@@ -292,7 +293,7 @@ class SentinelVerifier(BaseVerifier):
         expires_at = _effective_expiry(vd)
         common = {
             "payload_type": payload_type,
-            "replay_id": replay_id,
+            "replay_id": _signed_value(signed, "id"),
             "expires_at": expires_at,
             "score": score,
             "classification": classification,
@@ -316,7 +317,7 @@ class SentinelVerifier(BaseVerifier):
             return VerificationResult.failure(ErrorCode.SCORE_REJECTED, **common)
 
         if self.verify_fields:
-            error = self._fields_binding_error(vd, form_data)
+            error = self._fields_binding_error(signed, form_data)
             if error is not None:
                 return VerificationResult.failure(
                     ErrorCode.FIELDS_HASH_MISMATCH, error=error, **common
@@ -325,7 +326,7 @@ class SentinelVerifier(BaseVerifier):
         return VerificationResult.success(**common)
 
     def _fields_binding_error(
-        self, vd: Mapping[str, Any], form_data: Mapping[str, Any] | None
+        self, signed: object, form_data: Mapping[str, Any] | None
     ) -> str | None:
         """Why the submitted fields are not the ones Sentinel classified, or ``None``.
 
@@ -334,7 +335,7 @@ class SentinelVerifier(BaseVerifier):
         covered by the signed hash. Empty values are exempt because the widget never
         sends them for classification.
         """
-        fields_hash = vd.get("fieldsHash")
+        fields_hash = _signed_value(signed, "fieldsHash")
         if form_data is None:
             if not fields_hash:
                 return None
@@ -342,7 +343,10 @@ class SentinelVerifier(BaseVerifier):
                 "fieldsHash present but no form data was bound; use "
                 "AltchaMixin and AltchaField(bind_form_fields=[...])"
             )
-        fields = [str(f) for f in (vd.get("fields") or [])]
+        # Sentinel signs the field names joined with ","; split the raw value, since
+        # parse_verification_data turns a single name such as "123" into an int.
+        raw_fields = _signed_value(signed, "fields")
+        fields = raw_fields.split(",") if raw_fields else []
         submitted = [name for name, value in form_data.items() if value not in (None, "")]
         unsigned = [name for name in submitted if name not in fields]
         if unsigned and not fields_hash:
@@ -357,7 +361,7 @@ class SentinelVerifier(BaseVerifier):
         values = {name: _text(lookup(name)) for name in fields}
         # Sentinel always hashes field values with SHA-256, whatever digest signed the
         # payload; the payload's unsigned ``algorithm`` must not select it.
-        if not verify_fields_hash(values, fields, str(fields_hash), "SHA-256"):
+        if not verify_fields_hash(values, fields, fields_hash, "SHA-256"):
             return "fieldsHash does not match the submitted values"
         return None
 
@@ -376,16 +380,17 @@ def _text(value: object) -> str:
     return "" if value is None else str(value)
 
 
-def _signed_id(verification_data: object) -> str | None:
-    """The first ``id`` in the raw signed ``verificationData`` query string.
+def _signed_value(verification_data: object, key: str) -> str | None:
+    """The first ``key`` in the raw signed ``verificationData`` query string.
 
-    Read verbatim (like ``URLSearchParams.get``): ``parse_verification_data`` turns
-    ``0123`` into ``123``, ``1.10`` into ``1.1``, strips whitespace and makes ``0``
-    falsy, so distinct signed ids would share one replay key.
+    Read verbatim (like ``URLSearchParams.get``): ``parse_verification_data``
+    guesses types, turning ``0123`` into ``123``, ``1.10`` into ``1.1``, a single
+    ``fields`` name like ``123`` into an int, stripping whitespace and making ``0``
+    falsy. Ids would collide and field lists would not be lists.
     """
     if not isinstance(verification_data, str):
         return None
-    values = parse_qs(verification_data, keep_blank_values=True).get("id")
+    values = parse_qs(verification_data, keep_blank_values=True).get(key)
     return values[0] if values and values[0] else None
 
 

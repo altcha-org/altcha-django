@@ -143,6 +143,30 @@ def test_verify_fields_off_skips_binding():
     assert result.verified
 
 
+@pytest.mark.parametrize("name", ["123", "true", "1.5", "0"])
+def test_single_field_name_that_looks_like_a_value(name):
+    """Sentinel signs `fields=123`; parsing it as a number must not crash or lose it."""
+    payload = factories.make_sentinel_payload(SECRET, fields=[name], field_values={name: "hi"})
+    v = make_verifier(verify_fields=True)
+    assert v.verify(payload, form_data={name: "hi"}).verified
+    assert v.verify(payload, form_data={name: "spam"}).code == ErrorCode.FIELDS_HASH_MISMATCH.value
+
+
+def test_remote_mode_binds_fields_from_the_signed_payload():
+    """The response's verificationData is re-typed by Sentinel (fields=123 -> 123);
+    the submitted, Sentinel-verified string is used instead."""
+    payload = factories.make_sentinel_payload(SECRET, fields=["123"], field_values={"123": "hi"})
+    response = {
+        "verified": True,
+        "verificationData": {"fields": 123, "fieldsHash": "x", "expire": 9_999_999_999},
+    }
+    v = make_verifier(mode="remote", verify_fields=True, http_post=_fake_post(response))
+    assert v.verify(payload, form_data={"123": "hi"}).verified
+    assert (
+        v.verify(payload, form_data={"123": "spam"}).code == ErrorCode.FIELDS_HASH_MISMATCH.value
+    )
+
+
 def test_local_missing_secret():
     result = make_verifier(api_secret=None).verify(factories.make_sentinel_payload(SECRET))
     assert result.code == ErrorCode.MISCONFIGURED.value
