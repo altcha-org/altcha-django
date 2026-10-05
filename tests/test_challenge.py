@@ -157,6 +157,22 @@ def test_legacy_challenge_expire_ms_is_honoured():
     assert cfg.expires_seconds == 300
 
 
+@override_settings(ALTCHA_CHALLENGE={"max_number": 100_000})
+def test_explicit_none_override_selects_probabilistic_mode():
+    """None is the documented switch back from deterministic settings."""
+    from altcha_django.verifiers import LocalVerifier
+
+    assert get_challenge_config().deterministic
+    assert not get_challenge_config(max_number=None).deterministic
+    params = LocalVerifier(hmac_secret="s", challenge={"max_number": None}).get_challenge()
+    assert params["parameters"]["keyPrefix"] == ChallengeConfig().key_prefix
+
+
+@override_settings(ALTCHA_CHALLENGE={"memory_cost": 4096, "algorithm": "SCRYPT"})
+def test_omitted_override_keeps_the_setting():
+    assert get_challenge_config(cost=2).memory_cost == 4096
+
+
 def test_challenge_to_dict_matches_widget_shape():
     data = build_challenge(hmac_secret="s").to_dict()
     assert set(data) == {"parameters", "signature"}

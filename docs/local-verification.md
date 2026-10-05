@@ -52,6 +52,11 @@ a challenge is issued and by `manage.py check` (`altcha.E010`, `altcha.E013`):
 `max_number` below 1000 is allowed but warned about (`altcha.W016`): the client
 finds the counter after at most `max_number` KDF evaluations.
 
+Per-verifier overrides (`ALTCHA_VERIFIER_OPTIONS={"challenge": {...}}` or
+`LocalVerifier(challenge={...})`) replace the matching `ALTCHA_CHALLENGE` keys,
+including with `None`: `{"max_number": None}` switches back to probabilistic
+mode when the settings are deterministic.
+
 `ARGON2ID` requires `pip install 'altcha-django[argon2]'`.
 
 ## How verification works

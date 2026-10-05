@@ -93,7 +93,9 @@ class ChallengeConfig:
 
     @classmethod
     def from_settings(cls, **overrides: Any) -> ChallengeConfig:
-        data = {**conf.CHALLENGE, **{k: v for k, v in overrides.items() if v is not None}}
+        # An explicit None is a value, not "unset": max_number=None selects
+        # probabilistic mode even when ALTCHA_CHALLENGE sets max_number.
+        data = {**conf.CHALLENGE, **overrides}
         known = {f.name for f in dataclasses.fields(cls)}
         unknown = set(data) - known
         if unknown:
