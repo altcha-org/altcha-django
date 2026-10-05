@@ -35,6 +35,29 @@ def test_invalid_payload_error_code():
     assert form.errors["captcha"].as_data()[0].code == ErrorCode.INVALID_SIGNATURE.value
 
 
+@pytest.mark.parametrize(
+    "challenge",
+    [
+        "x",
+        {"parameters": [1]},
+        {"parameters": {"data": "x"}},
+        {"parameters": {"data": [1]}},
+        {"parameters": {"expiresAt": "abc"}},
+        {"parameters": {"expiresAt": {"a": 1}}},
+        {"parameters": {"expiresAt": float("inf")}},
+    ],
+)
+def test_malformed_challenge_parameters_are_a_form_error(challenge):
+    """Unsigned parameters of any shape must not raise out of is_valid() (HTTP 500)."""
+    import base64
+    import json
+
+    raw = base64.b64encode(json.dumps({"challenge": challenge, "solution": {}}).encode())
+    form = SimpleForm({"captcha": raw.decode()})
+    assert not form.is_valid()
+    assert form.errors["captcha"].as_data()[0].code != ErrorCode.REQUIRED.value
+
+
 def test_replay_across_two_submissions():
     payload = factories.make_pow_payload()
     assert SimpleForm({"captcha": payload}).is_valid()

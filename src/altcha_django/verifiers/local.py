@@ -111,24 +111,25 @@ class LocalVerifier(BaseVerifier):
                 payload_type=PayloadType.UNKNOWN,
             )
 
-        params = (decoded.get("challenge") or {}).get("parameters") or {}
-        raw_id = challenge_id(params.get("data")) or params.get("nonce")
-        replay_id: str | None = str(raw_id) if raw_id else None
-        expires_at = params.get("expiresAt")
-
         result = verify_solution(
             payload,
             self.hmac_secret,
             hmac_key_secret=self.hmac_key_secret,
             hmac_algorithm=_hmac_algo(self.hmac_algorithm),
         )
-        common: dict[str, Any] = {
-            "payload_type": PayloadType.POW_V2,
-            "replay_id": replay_id,
-            "expires_at": int(expires_at) if expires_at else None,
-            "duration_ms": result.time,
-        }
         if result.verified:
+            # Only now are the parameters known to be ones this server signed; before
+            # verification they are attacker-controlled JSON of any shape.
+            params = decoded["challenge"]["parameters"]
+            raw_id = challenge_id(params.get("data")) or params.get("nonce")
+            replay_id: str | None = str(raw_id) if raw_id else None
+            expires_at = params.get("expiresAt")
+            common: dict[str, Any] = {
+                "payload_type": PayloadType.POW_V2,
+                "replay_id": replay_id,
+                "expires_at": int(expires_at) if expires_at else None,
+                "duration_ms": result.time,
+            }
             code, reason = self._session_binding_failure(request, replay_id)
             if code is not None:
                 return VerificationResult.failure(code, error=reason, **common)
@@ -142,7 +143,9 @@ class LocalVerifier(BaseVerifier):
             code = ErrorCode.MALFORMED
         else:
             code = ErrorCode.INVALID_SOLUTION
-        return VerificationResult.failure(code, error=result.error, **common)
+        return VerificationResult.failure(
+            code, error=result.error, payload_type=PayloadType.POW_V2, duration_ms=result.time
+        )
 
     # -- session binding ------------------------------------------------
     def check_session_binding(self, request: HttpRequest | None, replay_id: str | None) -> bool:
