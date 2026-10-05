@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal, cast
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 from altcha import (
     parse_verification_data,
@@ -194,13 +194,19 @@ class SentinelVerifier(BaseVerifier):
 
         # The payload names the digest used for its own hashes (default SHA-256).
         hash_algorithm = str(decoded.get("algorithm") or "SHA-256").upper()
+        # Covered by the signature, but only trustworthy once that has been checked.
+        replay_id = _signed_id(decoded.get("verificationData"))
         if self.mode == "remote":
-            return self._verify_remote(payload, form_data, hash_algorithm)
-        return self._verify_local(payload, form_data, hash_algorithm)
+            return self._verify_remote(payload, form_data, hash_algorithm, replay_id)
+        return self._verify_local(payload, form_data, hash_algorithm, replay_id)
 
     # -- local mode -----------------------------------------------------
     def _verify_local(
-        self, payload: str, form_data: Mapping[str, Any] | None, hash_algorithm: str = "SHA-256"
+        self,
+        payload: str,
+        form_data: Mapping[str, Any] | None,
+        hash_algorithm: str,
+        replay_id: str | None,
     ) -> VerificationResult:
         if not self.api_secret:
             return VerificationResult.failure(
@@ -225,13 +231,18 @@ class SentinelVerifier(BaseVerifier):
             result.verification_data or {},
             form_data,
             PayloadType.SERVER_SIGNATURE,
+            replay_id=replay_id,
             duration_ms=result.time,
             hash_algorithm=hash_algorithm,
         )
 
     # -- remote mode ------------------------------------------------
     def _verify_remote(
-        self, payload: str, form_data: Mapping[str, Any] | None, hash_algorithm: str = "SHA-256"
+        self,
+        payload: str,
+        form_data: Mapping[str, Any] | None,
+        hash_algorithm: str,
+        replay_id: str | None,
     ) -> VerificationResult:
         result = verify_server(
             payload,
@@ -254,11 +265,17 @@ class SentinelVerifier(BaseVerifier):
             return VerificationResult.failure(
                 code, error=result.reason, payload_type=PayloadType.SENTINEL_REMOTE
             )
+        # Sentinel has verified the submitted payload's signature, so its signed id is
+        # authoritative; the response's verificationData was already type-coerced.
         vd = result.verification_data
         if isinstance(vd, str):
             vd = parse_verification_data(vd) or {}
         return self._finish(
-            vd or {}, form_data, PayloadType.SENTINEL_REMOTE, hash_algorithm=hash_algorithm
+            vd or {},
+            form_data,
+            PayloadType.SENTINEL_REMOTE,
+            replay_id=replay_id,
+            hash_algorithm=hash_algorithm,
         )
 
     # -- shared policy / success --------------------------------------
@@ -268,6 +285,7 @@ class SentinelVerifier(BaseVerifier):
         form_data: Mapping[str, Any] | None,
         payload_type: PayloadType,
         *,
+        replay_id: str | None,
         duration_ms: float | None = None,
         hash_algorithm: str = "SHA-256",
     ) -> VerificationResult:
@@ -275,7 +293,7 @@ class SentinelVerifier(BaseVerifier):
         score = vd.get("score")
         common = {
             "payload_type": payload_type,
-            "replay_id": str(vd["id"]) if vd.get("id") else None,
+            "replay_id": replay_id,
             "expires_at": int(vd["expire"]) if vd.get("expire") else None,
             "score": score,
             "classification": classification,
@@ -339,3 +357,16 @@ def _resolve_callable(value: str | Callable[..., Any] | None) -> Callable[..., A
 
     resolved: Callable[..., Any] = import_string(value)
     return resolved
+
+
+def _signed_id(verification_data: object) -> str | None:
+    """The first ``id`` in the raw signed ``verificationData`` query string.
+
+    Read verbatim (like ``URLSearchParams.get``): ``parse_verification_data`` turns
+    ``0123`` into ``123``, ``1.10`` into ``1.1``, strips whitespace and makes ``0``
+    falsy, so distinct signed ids would share one replay key.
+    """
+    if not isinstance(verification_data, str):
+        return None
+    values = parse_qs(verification_data, keep_blank_values=True).get("id")
+    return values[0] if values and values[0] else None

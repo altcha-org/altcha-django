@@ -71,17 +71,46 @@ def test_signed_payload_without_id_fails_closed():
     assert result.code == ErrorCode.MALFORMED.value
 
 
-def test_remote_response_without_id_fails_closed():
+def _remote_ok(response_vd):
     import json
 
     def post(url, data, headers, timeout):
-        body = {"verified": True, "verificationData": {"verified": True, "expire": 9999999999}}
-        return 200, json.dumps(body).encode()
+        return 200, json.dumps({"verified": True, "verificationData": response_vd}).encode()
 
-    payload = factories.make_sentinel_payload()
-    result = run_verification(payload, verifier=_sentinel(mode="remote", http_post=post))
+    return _sentinel(mode="remote", http_post=post)
+
+
+def test_remote_submitted_payload_without_id_fails_closed():
+    verifier = _remote_ok({"verified": True, "id": "from-response"})
+    result = run_verification(factories.make_sentinel_payload(omit_id=True), verifier=verifier)
     assert not result.verified
     assert result.code == ErrorCode.MALFORMED.value
+
+
+def test_remote_claims_the_submitted_signed_id():
+    """The id comes from the payload Sentinel verified, not the (coerced) response."""
+    verifier = _remote_ok({"verified": True, "id": 123})
+    first = factories.make_sentinel_payload(verification_id="0123")
+    second = factories.make_sentinel_payload(verification_id="123")
+    assert run_verification(first, verifier=verifier).replay_id == "0123"
+    assert run_verification(second, verifier=verifier).verified
+
+
+@pytest.mark.parametrize(("first", "second"), [("0123", "123"), ("1.10", "1.1"), (" abc ", "abc")])
+def test_distinct_signed_ids_are_distinct_claims(first, second):
+    """parse_verification_data coerces these to the same value; the claims must not."""
+    for vid in (first, second):
+        result = run_verification(
+            factories.make_sentinel_payload(verification_id=vid), verifier=_sentinel()
+        )
+        assert result.verified, result.code
+        assert result.replay_id == vid
+
+
+def test_signed_id_zero_is_a_valid_claim():
+    payload = factories.make_sentinel_payload(verification_id="0")
+    assert run_verification(payload, verifier=_sentinel()).verified
+    assert run_verification(payload, verifier=_sentinel()).code == ErrorCode.REPLAYED.value
 
 
 def test_custom_verifier_without_replay_id():
