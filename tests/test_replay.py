@@ -39,6 +39,33 @@ def test_fallback_ttl_used_without_expiry():
     assert rp._ttl(None) == 42
 
 
+def test_concurrent_submissions_of_one_payload_admit_exactly_one():
+    """The claim must be atomic in the backend (setIfAbsent), not check-then-set."""
+    import threading
+
+    from django.db import connections
+
+    payload = factories.make_pow_payload()
+    threads = 12
+    barrier = threading.Barrier(threads)
+    codes: list[str | None] = []
+
+    def submit():
+        barrier.wait()
+        try:
+            codes.append(run_verification(payload).code)
+        finally:
+            connections.close_all()
+
+    workers = [threading.Thread(target=submit) for _ in range(threads)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    assert codes.count(None) == 1
+    assert codes.count(ErrorCode.REPLAYED.value) == threads - 1
+
+
 def test_pipeline_marks_replay():
     payload = factories.make_pow_payload()
     assert run_verification(payload).verified

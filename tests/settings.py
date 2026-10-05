@@ -42,7 +42,9 @@ CACHES = {
     "dummy": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"},
 }
 if os.environ.get("ALTCHA_TEST_REDIS_URL"):
-    CACHES["redis"] = {
+    # Run the suite's replay claims on Redis (the CI `redis-replay` job). Tests
+    # clear this cache, which flushes the whole Redis database: use a dedicated one.
+    CACHES["default"] = {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": os.environ["ALTCHA_TEST_REDIS_URL"],
     }

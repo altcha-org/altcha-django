@@ -3,6 +3,13 @@ from __future__ import annotations
 import pytest
 
 
+def pytest_report_header(config):
+    """Show which backend holds replay claims, so a Redis CI run is visibly on Redis."""
+    from django.conf import settings
+
+    return f"altcha replay cache: {settings.CACHES['default']['BACKEND']}"
+
+
 @pytest.fixture(autouse=True)
 def _clear_caches():
     """Isolate replay/stats state between tests."""

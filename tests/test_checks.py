@@ -113,6 +113,7 @@ def test_w016_not_raised_at_recommended_bound():
     assert "altcha.W016" not in ids(check_config(None))
 
 
+@override_settings(ALTCHA_CACHE_ALIAS="shared")  # LocMem even when default is Redis
 def test_w001_locmem_replay_warning():
     assert "altcha.W001" in ids(check_config(None))
 
