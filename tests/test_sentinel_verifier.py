@@ -78,6 +78,13 @@ def test_unparseable_score_is_rejected_when_limited(score):
     assert make_verifier().verify(payload).verified  # no limit: score is informational
 
 
+@pytest.mark.parametrize("value", [0.5, None])
+def test_removed_min_score_argument_is_refused(value):
+    """Swallowed by **options, it would leave the operator with no score limit."""
+    with pytest.raises(AltchaConfigurationError, match="max_score"):
+        make_verifier(min_score=value)
+
+
 def test_fields_hash_match():
     payload = factories.make_sentinel_payload(
         SECRET, fields=["email"], field_values={"email": "a@b.com"}

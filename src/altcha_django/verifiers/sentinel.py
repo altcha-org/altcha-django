@@ -91,6 +91,14 @@ class SentinelVerifier(BaseVerifier):
         retries: int | None = None,
         **options: Any,
     ) -> None:
+        if "min_score" in options:
+            # Swallowed by **options it would silently drop the operator's threshold.
+            raise AltchaConfigurationError(
+                "SentinelVerifier(min_score=...) was removed: it rejected scores below the "
+                "limit, but Sentinel's score rises with spam likelihood. Use max_score "
+                "(GOOD < 1 <= NEUTRAL < 2 <= BAD); do not copy the old value, its meaning "
+                "is inverted."
+            )
         super().__init__(**options)
         self.challenge_url = (
             challenge_url if challenge_url is not None else conf.SENTINEL_CHALLENGE_URL

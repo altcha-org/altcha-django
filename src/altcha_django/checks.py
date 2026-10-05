@@ -485,6 +485,18 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
         errors.append(Warning(note, id="altcha.W010"))
     for note, hint in conf.removed_in_use():
         errors.append(Error(note, id="altcha.E015", hint=hint))
+    options = conf.VERIFIER_OPTIONS
+    if _is_sentinel(cls) and isinstance(options, dict) and "min_score" in options:
+        errors.append(
+            Error(
+                "ALTCHA_VERIFIER_OPTIONS['min_score'] was removed; SentinelVerifier refuses "
+                "to start with it. It rejected Sentinel scores *below* the limit, but the "
+                "score rises with spam likelihood.",
+                id="altcha.E015",
+                hint="Replace it with 'max_score' (GOOD < 1 <= NEUTRAL < 2 <= BAD); do not "
+                "copy the old value, its meaning is inverted.",
+            )
+        )
 
     if (
         _is_sentinel(cls)

@@ -182,6 +182,15 @@ def test_e015_not_raised_without_removed_settings():
     assert "altcha.E015" not in ids(check_config(None))
 
 
+@pytest.mark.parametrize("value", [0.5, None])
+def test_e015_min_score_in_sentinel_verifier_options(settings, value):
+    settings.ALTCHA_VERIFIER = "sentinel"
+    settings.ALTCHA_VERIFIER_OPTIONS = {"min_score": value}
+    messages = [m for m in check_config(None) if m.id == "altcha.E015"]
+    assert len(messages) == 1
+    assert "max_score" in messages[0].hint
+
+
 @pytest.mark.parametrize(
     ("challenge", "check_id"),
     [
