@@ -17,6 +17,7 @@ Sentinel is **self-hosted**. Configuration is just two values:
 from __future__ import annotations
 
 import json
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -291,15 +292,25 @@ class SentinelVerifier(BaseVerifier):
     ) -> VerificationResult:
         classification = vd.get("classification")
         score = vd.get("score")
+        expires_at = _effective_expiry(vd)
         common = {
             "payload_type": payload_type,
             "replay_id": replay_id,
-            "expires_at": int(vd["expire"]) if vd.get("expire") else None,
+            "expires_at": expires_at,
             "score": score,
             "classification": classification,
             "verification_data": dict(vd),
             "duration_ms": duration_ms,
         }
+        if expires_at is None:
+            return VerificationResult.failure(
+                ErrorCode.MALFORMED,
+                error="payload has neither a signed expire nor a signed time; "
+                "its age cannot be bounded",
+                **common,
+            )
+        if expires_at < int(time.time()):
+            return VerificationResult.failure(ErrorCode.EXPIRED, **common)
         if classification and str(classification).upper() in self.reject:
             return VerificationResult.failure(ErrorCode.CLASSIFICATION_REJECTED, **common)
         if self.min_score is not None and (score is None or score < self.min_score):
@@ -370,3 +381,29 @@ def _signed_id(verification_data: object) -> str | None:
         return None
     values = parse_qs(verification_data, keep_blank_values=True).get("id")
     return values[0] if values and values[0] else None
+
+
+def _timestamp(value: object) -> int | None:
+    """A positive int (as ``parse_verification_data`` yields for digits), else ``None``."""
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return None
+
+
+def _effective_expiry(vd: Mapping[str, Any]) -> int | None:
+    """Unix time after which verified Sentinel data must be refused, or ``None``.
+
+    A signed ``expire`` wins. Without one the payload would never expire, yet its
+    replay entry lasts only ``ALTCHA_REPLAY_FALLBACK_TTL``; after that it could be
+    accepted again. So it is treated as expiring ``REPLAY_FALLBACK_TTL`` seconds
+    after its signed ``time``, and the replay entry (TTL derived from
+    ``expires_at``) outlives that window. ``None`` means neither field is present,
+    so the age cannot be bounded at all.
+    """
+    expire = _timestamp(vd.get("expire"))
+    if expire is not None:
+        return expire
+    issued = _timestamp(vd.get("time"))
+    if issued is not None:
+        return issued + int(conf.REPLAY_FALLBACK_TTL)
+    return None

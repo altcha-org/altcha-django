@@ -74,6 +74,8 @@ def test_signed_payload_without_id_fails_closed():
 def _remote_ok(response_vd):
     import json
 
+    response_vd = {"expire": int(time.time()) + 600, **response_vd}
+
     def post(url, data, headers, timeout):
         return 200, json.dumps({"verified": True, "verificationData": response_vd}).encode()
 
@@ -111,6 +113,29 @@ def test_signed_id_zero_is_a_valid_claim():
     payload = factories.make_sentinel_payload(verification_id="0")
     assert run_verification(payload, verifier=_sentinel()).verified
     assert run_verification(payload, verifier=_sentinel()).code == ErrorCode.REPLAYED.value
+
+
+@override_settings(ALTCHA_REPLAY_FALLBACK_TTL=600)
+def test_payload_without_expire_is_bounded_by_signed_time():
+    """Accepting it after its replay entry lapsed would allow reuse."""
+    old = factories.make_sentinel_payload(expire_in=None, age=601)
+    assert run_verification(old, verifier=_sentinel()).code == ErrorCode.EXPIRED.value
+
+    fresh = factories.make_sentinel_payload(expire_in=None, age=590)
+    result = run_verification(fresh, verifier=_sentinel())
+    assert result.verified
+    # Replay entries live until expires_at (+ skew), i.e. the whole acceptance window.
+    assert abs(result.expires_at - (int(time.time()) + 10)) <= 1
+
+
+def test_signed_expire_takes_precedence_over_time():
+    payload = factories.make_sentinel_payload(expire_in=60, age=10 * 86400)
+    assert run_verification(payload, verifier=_sentinel()).verified
+
+
+def test_payload_without_expire_or_time_is_refused():
+    payload = factories.make_sentinel_payload(expire_in=None, age=None)
+    assert run_verification(payload, verifier=_sentinel()).code == ErrorCode.MALFORMED.value
 
 
 def test_custom_verifier_without_replay_id():

@@ -135,15 +135,21 @@ def make_sentinel_payload(
     bad_signature=False,
     algorithm="SHA-256",
     omit_id=False,
+    age=0,
 ) -> str:
+    """``expire_in=None`` / ``age=None`` omit the signed ``expire`` / ``time``;
+    ``age`` backdates ``time`` by that many seconds."""
     verification_id = verification_id or secrets.token_hex(8)
+    now = int(time.time())
     pairs: list[tuple[str, str]] = [
         ("verified", "true" if verified else "false"),
         ("score", str(score)),
         ("classification", classification),
-        ("expire", str(int(time.time()) + expire_in)),
-        ("time", str(int(time.time()))),
     ]
+    if expire_in is not None:
+        pairs.append(("expire", str(now + expire_in)))
+    if age is not None:
+        pairs.append(("time", str(now - age)))
     if not omit_id:
         pairs.append(("id", verification_id))
     if reasons:

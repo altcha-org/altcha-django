@@ -54,7 +54,7 @@ buckets. Invalid entries are reported by `altcha.E012`.
 | `ALTCHA_REPLAY_PROTECTION` | `True` |
 | `ALTCHA_CACHE_ALIAS` | `"default"` |
 | `ALTCHA_REPLAY_KEY_PREFIX` | `"altcha:replay:"` |
-| `ALTCHA_REPLAY_FALLBACK_TTL` | `3600` |
+| `ALTCHA_REPLAY_FALLBACK_TTL` | `3600` — also the maximum age of Sentinel payloads without `expire` |
 | `ALTCHA_REPLAY_CLOCK_SKEW` | `30` |
 
 With replay protection on, every verified payload is claimed once in the cache
@@ -63,6 +63,12 @@ verification, `verificationData.id` for Sentinel. A payload that verifies but
 carries no such id fails as `malformed`, since nothing would stop it from being
 reused. Custom verifiers must therefore set `VerificationResult.replay_id` on
 success; only test-mode results and the `null` verifier are exempt.
+
+Replay entries live until the payload expires (plus `ALTCHA_REPLAY_CLOCK_SKEW`).
+Sentinel payloads signed without an `expire` (API keys with no expiry) are
+treated as expiring `ALTCHA_REPLAY_FALLBACK_TTL` seconds after their signed
+`time`, so they cannot be accepted again once their replay entry is gone. A
+payload with neither field fails as `malformed`.
 
 ## Widget
 
