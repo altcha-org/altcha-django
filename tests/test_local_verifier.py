@@ -170,3 +170,34 @@ def test_check_session_binding_predicate_still_works():
     assert v.check_session_binding(None, "tok-a") is False
     # disabled -> always allowed
     assert LocalVerifier(hmac_secret=SECRET).check_session_binding(None, None) is True
+
+
+@pytest.mark.parametrize(
+    ("key_secret", "field", "value", "code"),
+    [
+        # 4a: keySignature path, derivedKey checked by HMAC
+        ("ks", "derivedKey", "zz", ErrorCode.INVALID_SOLUTION),
+        ("ks", "derivedKey", "abc", ErrorCode.INVALID_SOLUTION),
+        ("ks", "derivedKey", None, ErrorCode.INVALID_SOLUTION),
+        # 4b: re-derivation path, counter feeds struct.pack
+        (None, "counter", -1, ErrorCode.INVALID_SOLUTION),
+        (None, "counter", 2**32, ErrorCode.INVALID_SOLUTION),
+        (None, "counter", "42", ErrorCode.INVALID_SOLUTION),
+        (None, "signature", 123, ErrorCode.INVALID_SIGNATURE),
+    ],
+)
+def test_malformed_solution_fields_fail_without_raising(key_secret, field, value, code):
+    """altcha<2.3.0 raised on these, turning attacker input into an HTTP 500."""
+    import base64
+    import json
+
+    from altcha import Challenge, Payload, solve_challenge
+
+    v = LocalVerifier(hmac_secret=SECRET, hmac_key_secret=key_secret)
+    challenge = Challenge.from_dict(v.get_challenge())
+    raw = Payload(challenge, solve_challenge(challenge)).to_dict()
+    target = raw["challenge"] if field == "signature" else raw["solution"]
+    target[field] = value
+    result = v.verify(base64.b64encode(json.dumps(raw).encode()).decode())
+    assert not result.verified
+    assert result.code == code.value

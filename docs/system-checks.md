@@ -6,7 +6,7 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 
 | id | condition |
 |---|---|
-| `altcha.E001` | `altcha` package missing or `< 2.1.0` |
+| `altcha.E001` | `altcha` package missing or `< 2.3.0` |
 | `altcha.E002` | `ALTCHA_VERIFIER` cannot be resolved |
 | `altcha.E003` | local verifier, not test mode, `ALTCHA_HMAC_SECRET` unset |
 | `altcha.E004` | Sentinel local mode without `ALTCHA_SENTINEL_API_SECRET` |

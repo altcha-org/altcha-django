@@ -232,7 +232,7 @@ def test_fields_hash_mismatch_under_a_non_default_algorithm():
 
 
 def test_hostile_payload_algorithm_is_rejected_not_raised():
-    """The payload names its own digest; an unknown one must not reach hashlib.new()."""
+    """The payload names its own digest; an unknown one is a bad signature, not a crash."""
     import base64
     import json
 
@@ -248,4 +248,4 @@ def test_hostile_payload_algorithm_is_rejected_not_raised():
     ).decode()
     result = make_verifier().verify(evil)  # must not raise
     assert not result.verified
-    assert result.code == ErrorCode.MALFORMED.value
+    assert result.code == ErrorCode.INVALID_SIGNATURE.value

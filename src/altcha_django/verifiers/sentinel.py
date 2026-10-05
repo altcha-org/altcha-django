@@ -206,16 +206,9 @@ class SentinelVerifier(BaseVerifier):
             return VerificationResult.failure(
                 ErrorCode.MISCONFIGURED, error="ALTCHA_SENTINEL_API_SECRET is not set"
             )
-        try:
-            result = verify_server_signature(payload, self.api_secret)
-        except ValueError as exc:
-            # The payload names its own digest and the library feeds it straight to
-            # hashlib.new(); an unknown name would otherwise raise out of clean().
-            return VerificationResult.failure(
-                ErrorCode.MALFORMED,
-                error=f"unsupported payload algorithm: {exc}",
-                payload_type=PayloadType.SERVER_SIGNATURE,
-            )
+        # altcha>=2.3.0 rejects an unknown or malformed payload `algorithm` with
+        # invalid_signature; it only raises for an empty secret, handled above.
+        result = verify_server_signature(payload, self.api_secret)
         if not result.verified:
             if result.expired:
                 code = ErrorCode.EXPIRED

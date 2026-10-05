@@ -37,7 +37,7 @@ classifiers = [
 ]
 dependencies = [
     "Django>=4.2",
-    "altcha>=2.1.0,<3.0.0",
+    "altcha>=2.3.0,<3.0.0",
 ]
 
 [project.urls]

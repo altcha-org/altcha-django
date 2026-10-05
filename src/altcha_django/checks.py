@@ -21,6 +21,11 @@ _CHALLENGE_CHECK_IDS = {"algorithm": "altcha.E009", "key_prefix": "altcha.E010"}
 #: KDF evaluations.
 _MIN_RECOMMENDED_MAX_NUMBER = 1000
 
+#: Oldest ``altcha`` release that returns a result (instead of raising) for malformed
+#: solutions and server-signature payloads. Keep in sync with pyproject.toml.
+_MIN_ALTCHA_VERSION = (2, 3, 0)
+_ALTCHA_INSTALL_HINT = f"pip install 'altcha>={'.'.join(map(str, _MIN_ALTCHA_VERSION))}'"
+
 
 def _altcha_version() -> tuple[int, ...] | None:
     try:
@@ -228,15 +233,16 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
             Error(
                 "The 'altcha' package is not installed.",
                 id="altcha.E001",
-                hint="pip install 'altcha>=2.1.0'",
+                hint=_ALTCHA_INSTALL_HINT,
             )
         )
-    elif version < (2, 1, 0):
+    elif version < _MIN_ALTCHA_VERSION:
         errors.append(
             Error(
-                f"altcha {'.'.join(map(str, version))} is too old.",
+                f"altcha {'.'.join(map(str, version))} is too old; older releases raise "
+                "on malformed payloads instead of rejecting them.",
                 id="altcha.E001",
-                hint="pip install 'altcha>=2.1.0'",
+                hint=_ALTCHA_INSTALL_HINT,
             )
         )
 
