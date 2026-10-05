@@ -43,6 +43,21 @@ _KNOWN_ALGORITHMS = frozenset(
 )
 _HEX = set(string.hexdigits)
 
+#: Shortest accepted derived key, in bytes. In deterministic mode half of the key is
+#: published as ``keyPrefix``; with ``ALTCHA_CHALLENGE_HMAC_KEY_SECRET`` the server then
+#: verifies the submitted key by HMAC alone, so the unpublished half must be infeasible
+#: to guess with online attempts.
+MIN_KEY_LENGTH = 16
+
+#: The iterated-SHA KDF returns at most one digest, so a longer ``key_length`` is
+#: silently truncated to these sizes (bytes).
+_SHA_DIGEST_SIZES = {"SHA-256": 32, "SHA-384": 48, "SHA-512": 64}
+
+
+def _is_positive_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
 #: Key under ``parameters.data`` holding the challenge's unique id. Matches what
 #: ALTCHA Sentinel emits, so both backends can be read the same way.
 CHALLENGE_ID_KEY = "id"
@@ -97,21 +112,91 @@ class ChallengeConfig:
         span = max(1, hi - lo)
         return lo + secrets.randbelow(span)
 
-    def validate(self) -> None:
+    def problems(self) -> list[tuple[str, str]]:
+        """``(field, message)`` for every setting that makes the challenge unusable.
+
+        Besides type errors this rejects configurations that need no proof of work:
+        an empty ``key_prefix`` (any counter matches), and a ``key_length`` that leaves
+        no secret half of the derived key behind the published deterministic prefix.
+        """
+        found: list[tuple[str, str]] = []
         if self.algorithm not in _KNOWN_ALGORITHMS:
-            raise AltchaConfigurationError(
-                f"Unknown challenge algorithm {self.algorithm!r}. "
-                f"Expected one of: {', '.join(sorted(_KNOWN_ALGORITHMS))}."
+            found.append(
+                (
+                    "algorithm",
+                    f"Unknown challenge algorithm {self.algorithm!r}. "
+                    f"Expected one of: {', '.join(sorted(_KNOWN_ALGORITHMS))}.",
+                )
             )
-        if self.cost < 1:
-            raise AltchaConfigurationError("Challenge 'cost' must be >= 1.")
-        if not self.deterministic and set(self.key_prefix) - _HEX:
-            raise AltchaConfigurationError(
-                f"Challenge 'key_prefix' must be hex; got {self.key_prefix!r}. "
-                "A non-hex prefix makes the challenge unsolvable."
+        for name in ("cost", "key_length", "expires_seconds"):
+            value = getattr(self, name)
+            if not _is_positive_int(value):
+                found.append(
+                    (name, f"Challenge {name!r} must be a positive integer; got {value!r}.")
+                )
+        for name in ("max_number", "memory_cost", "parallelism"):
+            value = getattr(self, name)
+            if value is not None and not _is_positive_int(value):
+                found.append(
+                    (
+                        name,
+                        f"Challenge {name!r} must be None or a positive integer; got {value!r}.",
+                    )
+                )
+
+        key_length_ok = _is_positive_int(self.key_length)
+        if key_length_ok and self.key_length < MIN_KEY_LENGTH:
+            found.append(
+                (
+                    "key_length",
+                    f"Challenge 'key_length' must be at least {MIN_KEY_LENGTH} bytes; "
+                    f"got {self.key_length}. A shorter key publishes too much of itself "
+                    "(or an empty prefix) in deterministic mode.",
+                )
             )
-        if self.expires_seconds < 1:
-            raise AltchaConfigurationError("Challenge 'expires_seconds' must be >= 1.")
+        digest_size = _SHA_DIGEST_SIZES.get(self.algorithm)
+        if key_length_ok and digest_size is not None and self.key_length > digest_size:
+            found.append(
+                (
+                    "key_length",
+                    f"Challenge 'key_length' must be at most {digest_size} bytes for "
+                    f"{self.algorithm}; got {self.key_length}. The KDF returns one digest, "
+                    "so deterministic mode would publish the whole derived key.",
+                )
+            )
+
+        if not self.deterministic:
+            prefix = self.key_prefix
+            if not isinstance(prefix, str) or not prefix:
+                found.append(
+                    (
+                        "key_prefix",
+                        f"Challenge 'key_prefix' must be a non-empty hex string; got {prefix!r}. "
+                        "An empty prefix is matched by any counter.",
+                    )
+                )
+            elif set(prefix) - _HEX:
+                found.append(
+                    (
+                        "key_prefix",
+                        f"Challenge 'key_prefix' must be hex; got {prefix!r}. "
+                        "A non-hex prefix makes the challenge unsolvable.",
+                    )
+                )
+            elif key_length_ok and len(prefix) > 2 * self.key_length:
+                found.append(
+                    (
+                        "key_prefix",
+                        f"Challenge 'key_prefix' is {len(prefix)} hex characters, longer than "
+                        f"the {self.key_length}-byte derived key; the challenge is unsolvable.",
+                    )
+                )
+        return found
+
+    def validate(self) -> None:
+        problems = self.problems()
+        if problems:
+            raise AltchaConfigurationError(" ".join(message for _, message in problems))
 
 
 def get_challenge_config(**overrides: Any) -> ChallengeConfig:

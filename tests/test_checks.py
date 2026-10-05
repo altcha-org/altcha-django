@@ -81,6 +81,38 @@ def test_e010_not_raised_in_deterministic_mode():
     assert "altcha.E010" not in ids(check_config(None))
 
 
+@override_settings(ALTCHA_CHALLENGE={"key_prefix": ""})
+def test_e010_empty_key_prefix():
+    assert "altcha.E010" in ids(check_config(None))
+
+
+@override_settings(
+    ALTCHA_CHALLENGE={"algorithm": "SHA-256", "key_length": 64, "max_number": 10000}
+)
+def test_e013_sha_key_length_above_digest_size():
+    assert "altcha.E013" in ids(check_config(None))
+
+
+@override_settings(ALTCHA_CHALLENGE={"cost": "5000"})
+def test_e013_wrong_type_is_reported_not_raised():
+    assert "altcha.E013" in ids(check_config(None))
+
+
+@override_settings(ALTCHA_CHALLENGE={"nonsense": 1})
+def test_e013_unknown_challenge_key():
+    assert "altcha.E013" in ids(check_config(None))
+
+
+@override_settings(ALTCHA_CHALLENGE={"max_number": 999})
+def test_w016_small_max_number():
+    assert "altcha.W016" in ids(check_config(None))
+
+
+@override_settings(ALTCHA_CHALLENGE={"max_number": 1000})
+def test_w016_not_raised_at_recommended_bound():
+    assert "altcha.W016" not in ids(check_config(None))
+
+
 def test_w001_locmem_replay_warning():
     assert "altcha.W001" in ids(check_config(None))
 

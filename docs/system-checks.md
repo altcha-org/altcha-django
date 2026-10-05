@@ -15,9 +15,10 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.E007` | `ALTCHA_CACHE_ALIAS` not in `CACHES` |
 | `altcha.E008` | `WIDGET_JS_SOURCE="custom"` without `ALTCHA_WIDGET_JS_URL` |
 | `altcha.E009` | unknown `ALTCHA_CHALLENGE["algorithm"]` |
-| `altcha.E010` | `ALTCHA_CHALLENGE["key_prefix"]` is not hex (probabilistic mode) |
+| `altcha.E010` | `ALTCHA_CHALLENGE["key_prefix"]` is empty, not hex, or longer than the derived key (probabilistic mode) |
 | `altcha.E011` | `CHALLENGE_BIND_SESSION` on without `django.contrib.sessions` + `SessionMiddleware` |
 | `altcha.E012` | `ALTCHA_TRUSTED_PROXIES` has entries that are not valid IPs/CIDRs |
+| `altcha.E013` | other invalid `ALTCHA_CHALLENGE` values: unknown keys, non-integer or non-positive numbers, `key_length` below 16, or above the digest size for `SHA-256`/`384`/`512` |
 
 ## Warnings
 
@@ -38,3 +39,4 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.W013` | `CHALLENGE_BIND_SESSION` on with a verifier that ignores it (Sentinel, null) |
 | `altcha.W014` | `ALTCHA_WIDGET_DEFAULTS` has keys that are not `<altcha-widget>` attributes |
 | `altcha.W015` | challenge endpoint disabled while its URL is still wired (route 404s) |
+| `altcha.W016` | deterministic `max_number` below 1000 |

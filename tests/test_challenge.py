@@ -7,7 +7,12 @@ import pytest
 from altcha import verify_solution
 from django.test import override_settings
 
-from altcha_django.challenge import ChallengeConfig, build_challenge, get_challenge_config
+from altcha_django.challenge import (
+    MIN_KEY_LENGTH,
+    ChallengeConfig,
+    build_challenge,
+    get_challenge_config,
+)
 from altcha_django.exceptions import AltchaConfigurationError
 
 pytestmark = pytest.mark.django_db
@@ -50,6 +55,59 @@ def test_probabilistic_mode_when_max_number_unset():
 def test_non_hex_key_prefix_rejected():
     with pytest.raises(AltchaConfigurationError):
         ChallengeConfig(key_prefix="zz").validate()
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field"),
+    [
+        # probabilistic: an empty prefix is matched by counter 0
+        ({"key_prefix": "", "max_number": None}, "key_prefix"),
+        # deterministic: key_length // 2 == 0 -> empty published prefix
+        ({"key_length": 1, "max_number": 1000}, "key_length"),
+        ({"key_length": MIN_KEY_LENGTH - 1, "max_number": 1000}, "key_length"),
+        # SHA KDFs cap the key at one digest -> the "half" prefix is the whole key
+        ({"algorithm": "SHA-256", "key_length": 33, "max_number": 1000}, "key_length"),
+        ({"algorithm": "SHA-384", "key_length": 49, "max_number": 1000}, "key_length"),
+        ({"algorithm": "SHA-512", "key_length": 65, "max_number": 1000}, "key_length"),
+        # unsolvable: longer than the derived key
+        ({"key_prefix": "0" * 65, "key_length": 32, "max_number": None}, "key_prefix"),
+        ({"cost": "5000"}, "cost"),
+        ({"max_number": 0}, "max_number"),
+        ({"max_number": True}, "max_number"),
+        ({"memory_cost": -1}, "memory_cost"),
+    ],
+)
+def test_unsafe_challenge_config_rejected(overrides, field):
+    cfg = ChallengeConfig(**overrides)
+    assert field in {f for f, _ in cfg.problems()}
+    with pytest.raises(AltchaConfigurationError):
+        cfg.validate()
+    with pytest.raises(AltchaConfigurationError):
+        build_challenge(hmac_secret="s", hmac_key_secret="k", config=cfg)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"key_length": MIN_KEY_LENGTH},
+        {"algorithm": "SHA-256", "key_length": 32, "max_number": 1000},
+        {"algorithm": "SHA-384", "key_length": 48, "max_number": 1000},
+        {"algorithm": "SHA-512", "key_length": 64, "max_number": 1000},
+        {"algorithm": "PBKDF2/SHA-256", "key_length": 64, "max_number": 1000},
+        {"key_prefix": "0" * 64, "key_length": 32},
+    ],
+)
+def test_boundary_challenge_config_accepted(overrides):
+    assert ChallengeConfig(**overrides).problems() == []
+
+
+def test_deterministic_prefix_never_publishes_the_whole_key():
+    """The bypass behind the key_length limits: with a keySignature the server checks
+    only HMAC(derivedKey), so a published full key would verify with no work."""
+    for algorithm, digest in (("SHA-256", 32), ("SHA-384", 48), ("SHA-512", 64)):
+        cfg = ChallengeConfig(algorithm=algorithm, cost=1, key_length=digest, max_number=1000)
+        params = build_challenge(hmac_secret="s", hmac_key_secret="k", config=cfg).parameters
+        assert len(params.key_prefix) == digest  # half of the digest, in hex
 
 
 def test_explicit_counter_override_forces_deterministic():

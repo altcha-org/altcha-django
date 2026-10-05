@@ -35,6 +35,23 @@ ALTCHA_CHALLENGE = {
 }
 ```
 
+Settings that would let a challenge be solved without real work are rejected when
+a challenge is issued and by `manage.py check` (`altcha.E010`, `altcha.E013`):
+
+- `key_prefix` must be non-empty hex, at most `2 * key_length` characters
+  (probabilistic mode). An empty prefix is matched by any counter.
+- `key_length` must be at least 16 bytes. In deterministic mode half of the derived
+  key is published as the prefix.
+- For `SHA-256`, `SHA-384` and `SHA-512`, `key_length` must not exceed the digest
+  size (32, 48, 64). These KDFs return a single digest, so a longer `key_length`
+  would publish the whole key, which `ALTCHA_CHALLENGE_HMAC_KEY_SECRET` then
+  accepts with no work.
+- `cost`, `key_length`, `expires_seconds` and, when set, `max_number`,
+  `memory_cost` and `parallelism` must be positive integers.
+
+`max_number` below 1000 is allowed but warned about (`altcha.W016`): the client
+finds the counter after at most `max_number` KDF evaluations.
+
 `ARGON2ID` requires `pip install 'altcha-django[argon2]'`.
 
 ## How verification works

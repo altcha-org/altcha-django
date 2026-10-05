@@ -8,10 +8,18 @@ from typing import Any
 from django.core.cache import caches
 from django.core.checks import CheckMessage, Error, Info, Tags, Warning, register
 
-from .challenge import _KNOWN_ALGORITHMS
+from .challenge import ChallengeConfig
 from .conf import conf
+from .exceptions import AltchaConfigurationError
 
 _TAG = "altcha"
+
+#: ChallengeConfig field -> check id. Fields not listed report as ``altcha.E013``.
+_CHALLENGE_CHECK_IDS = {"algorithm": "altcha.E009", "key_prefix": "altcha.E010"}
+
+#: Below this, deterministic mode bounds the client's work at a trivial number of
+#: KDF evaluations.
+_MIN_RECOMMENDED_MAX_NUMBER = 1000
 
 
 def _altcha_version() -> tuple[int, ...] | None:
@@ -52,6 +60,19 @@ def _is_local_pow(cls: type | None) -> bool:
     from .verifiers import LocalVerifier
 
     return cls is not None and issubclass(cls, LocalVerifier)
+
+
+def _check_challenge_config() -> list[CheckMessage]:
+    """Run :meth:`ChallengeConfig.problems` so ``manage.py check`` reports what
+    issuing a challenge would raise."""
+    try:
+        cfg = ChallengeConfig.from_settings()
+    except AltchaConfigurationError as exc:
+        return [Error(str(exc), id="altcha.E013")]
+    return [
+        Error(message, id=_CHALLENGE_CHECK_IDS.get(field, "altcha.E013"))
+        for field, message in cfg.problems()
+    ]
 
 
 def _check_session_binding(cls: type | None) -> list[CheckMessage]:
@@ -287,26 +308,7 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
             )
         )
 
-    algorithm = conf.CHALLENGE.get("algorithm")
-    if algorithm not in _KNOWN_ALGORITHMS:
-        errors.append(
-            Error(
-                f"Unknown challenge algorithm {algorithm!r}.",
-                id="altcha.E009",
-                hint=f"Expected one of {sorted(_KNOWN_ALGORITHMS)}.",
-            )
-        )
-
-    key_prefix = str(conf.CHALLENGE.get("key_prefix", "00"))
-    probabilistic = conf.CHALLENGE.get("max_number") is None
-    if probabilistic and set(key_prefix) - set("0123456789abcdefABCDEF"):
-        errors.append(
-            Error(
-                f"ALTCHA_CHALLENGE['key_prefix']={key_prefix!r} is not hex; "
-                "the challenge would be unsolvable.",
-                id="altcha.E010",
-            )
-        )
+    errors.extend(_check_challenge_config())
 
     # --- warnings ---------------------------------------------------
     if conf.REPLAY_PROTECTION and cache_backend is not None:
@@ -346,8 +348,9 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
                     hint="pip install 'altcha-django[argon2]'",
                 )
             )
+    # Non-integer values are reported by altcha.E013; only compare real integers here.
     cost = challenge.get("cost", 0)
-    if cost and not 1000 <= cost <= 500_000:
+    if isinstance(cost, int) and cost and not 1000 <= cost <= 500_000:
         errors.append(
             Warning(
                 f"Challenge cost {cost} is outside the recommended 1000-500000 range.",
@@ -355,10 +358,21 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
             )
         )
     expires = challenge.get("expires_seconds", 0)
-    if expires and not 60 <= expires <= 3600:
+    if isinstance(expires, int) and expires and not 60 <= expires <= 3600:
         errors.append(
             Warning(
                 f"Challenge expiry {expires}s is unusual (recommended 60-3600).", id="altcha.W007"
+            )
+        )
+    max_number = challenge.get("max_number")
+    if isinstance(max_number, int) and 0 < max_number < _MIN_RECOMMENDED_MAX_NUMBER:
+        errors.append(
+            Warning(
+                f"Challenge max_number {max_number} bounds each solve at {max_number} KDF "
+                f"evaluations (recommended >= {_MIN_RECOMMENDED_MAX_NUMBER}).",
+                id="altcha.W016",
+                hint="The secret counter lies in [max_number // 2, max_number); with a "
+                "small bound the client finds it almost immediately.",
             )
         )
 
