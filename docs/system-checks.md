@@ -20,6 +20,7 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.E012` | `ALTCHA_TRUSTED_PROXIES` has entries that are not valid IPs/CIDRs |
 | `altcha.E013` | other invalid `ALTCHA_CHALLENGE` values: unknown keys, non-integer or non-positive numbers, `key_length` below 16, or above the digest size for `SHA-256`/`384`/`512` |
 | `altcha.E014` | replay on + `DummyCache` (stores nothing, every payload reusable) |
+| `altcha.E015` | a removed `ALTCHA_*` setting is still set (`ALTCHA_SENTINEL_MIN_SCORE`) — its value would be silently ignored |
 
 ## Warnings
 

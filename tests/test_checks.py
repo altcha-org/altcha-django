@@ -168,6 +168,19 @@ def test_w010_deprecated_setting():
     assert "altcha.W010" in ids(check_config(None))
 
 
+@pytest.mark.parametrize("value", [0.5, None])
+def test_e015_removed_min_score_setting(settings, value):
+    """Any value, even None: the old setting must not be silently ignored."""
+    settings.ALTCHA_SENTINEL_MIN_SCORE = value
+    messages = [m for m in check_config(None) if m.id == "altcha.E015"]
+    assert len(messages) == 1
+    assert "ALTCHA_SENTINEL_MAX_SCORE" in messages[0].hint
+
+
+def test_e015_not_raised_without_removed_settings():
+    assert "altcha.E015" not in ids(check_config(None))
+
+
 @override_settings(ALTCHA_WIDGET_CHALLENGE_MODE="endpoint")
 def test_w009_only_when_url_missing():
     # tests.urls DOES wire the endpoint, so W009 must NOT fire here

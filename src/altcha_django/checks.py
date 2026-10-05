@@ -482,6 +482,8 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
 
     for note in conf.deprecated_in_use():
         errors.append(Warning(note, id="altcha.W010"))
+    for note, hint in conf.removed_in_use():
+        errors.append(Error(note, id="altcha.E015", hint=hint))
 
     if (
         _is_sentinel(cls)

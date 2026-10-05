@@ -38,6 +38,10 @@ Sentinel's `score` rises with spam likelihood: `GOOD` below 1, `NEUTRAL` below 2
 rejects scores above the limit, and scores that are not a finite number.
 `result.score` is a `float`, or `None` if Sentinel's score was not numeric.
 
+`ALTCHA_SENTINEL_MIN_SCORE` (1.0.0) worked the wrong way round and has been
+removed; `manage.py check` fails with `altcha.E015` while it is still set. Don't
+copy its value into `ALTCHA_SENTINEL_MAX_SCORE`.
+
 Rejections surface as `code="classification_rejected"` / `code="score_rejected"`.
 
 Read the verdict in your view:

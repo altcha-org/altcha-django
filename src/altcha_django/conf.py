@@ -106,6 +106,19 @@ DEPRECATED: dict[str, tuple[str, str]] = {
     ),
 }
 
+#: old setting name -> (note, hint). Values are no longer read; ``checks.E015``
+#: refuses to start while one is set, because silently ignoring it changes behaviour.
+REMOVED: dict[str, tuple[str, str]] = {
+    "SENTINEL_MIN_SCORE": (
+        "ALTCHA_SENTINEL_MIN_SCORE was removed and is ignored. It rejected Sentinel "
+        "scores *below* the limit, but the score rises with spam likelihood, so it "
+        "rejected clean submissions and accepted spam.",
+        "Delete ALTCHA_SENTINEL_MIN_SCORE. To reject spammy scores set "
+        "ALTCHA_SENTINEL_MAX_SCORE (GOOD < 1 <= NEUTRAL < 2 <= BAD); do not copy "
+        "the old value, its meaning is inverted.",
+    ),
+}
+
 
 class AppSettings:
     """Lazy, cached accessor for ``ALTCHA_*`` settings."""
@@ -185,6 +198,10 @@ class AppSettings:
         if hasattr(settings, PREFIX + "VERIFICATION_ENABLED"):
             notes.append("ALTCHA_VERIFICATION_ENABLED is deprecated; set ALTCHA_VERIFIER='null'.")
         return notes
+
+    def removed_in_use(self) -> list[tuple[str, str]]:
+        """``(note, hint)`` for every removed setting that is still defined."""
+        return [entry for old, entry in REMOVED.items() if self._raw(old) is not _UNSET]
 
 
 class _Unset:
