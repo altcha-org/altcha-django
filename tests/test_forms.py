@@ -135,6 +135,7 @@ def test_bind_form_fields_feeds_sentinel(settings):
     settings.ALTCHA_VERIFIER = "sentinel"
     settings.ALTCHA_SENTINEL_CHALLENGE_URL = "https://s.example.com/v1/challenge?apiKey=k"
     settings.ALTCHA_SENTINEL_API_SECRET = "secret"
+    settings.ALTCHA_SENTINEL_VERIFY_FIELDS = True
 
     class F(AltchaMixin, forms.Form):
         email = forms.EmailField()

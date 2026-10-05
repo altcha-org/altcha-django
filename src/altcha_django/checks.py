@@ -435,13 +435,17 @@ def check_config(app_configs: Any, **kwargs: Any) -> list[CheckMessage]:
     errors.extend(_check_trusted_proxies())
 
     if _is_sentinel(cls) and conf.SENTINEL_VERIFY_FIELDS:
-        errors.append(
-            Info(
-                "ALTCHA_SENTINEL_VERIFY_FIELDS is on; fieldsHash checks need "
-                "AltchaMixin + AltchaField(bind_form_fields=[...]) on your forms.",
-                id="altcha.W012",
-            )
+        message = (
+            "ALTCHA_SENTINEL_VERIFY_FIELDS is on; fieldsHash checks need "
+            "AltchaMixin + AltchaField(bind_form_fields=[...]) on your forms."
         )
+        if not conf.SENTINEL_SPAMFILTER:
+            message += (
+                " ALTCHA_SENTINEL_SPAMFILTER is off, so the widget does not send fields "
+                "for classification: bound fields submitted non-empty will fail with "
+                "fields_hash_mismatch unless the widget configuration sets verifyUrl."
+            )
+        errors.append(Info(message, id="altcha.W012"))
 
     for note in conf.deprecated_in_use():
         errors.append(Warning(note, id="altcha.W010"))

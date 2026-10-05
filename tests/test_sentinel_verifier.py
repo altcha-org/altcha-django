@@ -78,6 +78,47 @@ def test_fields_hash_without_form_data():
     assert result.code == ErrorCode.FIELDS_HASH_MISMATCH.value
 
 
+def test_bound_field_without_fields_hash_rejected():
+    """A client that skips classification (no fields sent to Sentinel) gets no pass."""
+    payload = factories.make_sentinel_payload(SECRET)
+    result = make_verifier(verify_fields=True).verify(payload, form_data={"message": "spam"})
+    assert result.code == ErrorCode.FIELDS_HASH_MISMATCH.value
+
+
+def test_bound_field_outside_signed_fields_rejected():
+    payload = factories.make_sentinel_payload(
+        SECRET, fields=["other"], field_values={"other": "x"}
+    )
+    result = make_verifier(verify_fields=True).verify(
+        payload, form_data={"message": "spam", "other": "x"}
+    )
+    assert result.code == ErrorCode.FIELDS_HASH_MISMATCH.value
+
+
+@pytest.mark.parametrize("empty", ["", None])
+def test_empty_bound_field_need_not_be_signed(empty):
+    """The widget never sends empty fields for classification."""
+    v = make_verifier(verify_fields=True)
+    assert v.verify(factories.make_sentinel_payload(SECRET), form_data={"message": empty}).verified
+    payload = factories.make_sentinel_payload(
+        SECRET, fields=["email"], field_values={"email": "a@b.com"}
+    )
+    result = v.verify(payload, form_data={"email": "a@b.com", "message": empty})
+    assert result.verified
+
+
+def test_unbound_form_ignores_missing_fields_hash():
+    assert (
+        make_verifier(verify_fields=True).verify(factories.make_sentinel_payload(SECRET)).verified
+    )
+
+
+def test_verify_fields_off_skips_binding():
+    payload = factories.make_sentinel_payload(SECRET)
+    result = make_verifier(verify_fields=False).verify(payload, form_data={"message": "spam"})
+    assert result.verified
+
+
 def test_local_missing_secret():
     result = make_verifier(api_secret=None).verify(factories.make_sentinel_payload(SECRET))
     assert result.code == ErrorCode.MISCONFIGURED.value

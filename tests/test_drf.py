@@ -49,6 +49,7 @@ def test_sentinel_fields_hash(settings):
     settings.ALTCHA_VERIFIER = "sentinel"
     settings.ALTCHA_SENTINEL_CHALLENGE_URL = "https://s.example.com/v1/challenge?apiKey=k"
     settings.ALTCHA_SENTINEL_API_SECRET = "secret"
+    settings.ALTCHA_SENTINEL_VERIFY_FIELDS = True
 
     payload = factories.make_sentinel_payload(
         "secret", fields=["email"], field_values={"email": "a@b.com"}

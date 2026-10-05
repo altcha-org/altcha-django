@@ -35,7 +35,7 @@ Run `python manage.py check` (add `--deploy` for `W004`). Tag: `altcha`.
 | `altcha.W009` | `WIDGET_CHALLENGE_MODE="endpoint"` but URL not wired |
 | `altcha.W010` | a deprecated `ALTCHA_*` setting is in use |
 | `altcha.W011` | Sentinel remote + retries on the stdlib transport |
-| `altcha.W012` | (info) `SENTINEL_VERIFY_FIELDS` on — remember `bind_form_fields` |
+| `altcha.W012` | (info) `SENTINEL_VERIFY_FIELDS` enabled — remember `bind_form_fields`; notes that bound fields fail while `SENTINEL_SPAMFILTER` is off |
 | `altcha.W013` | `CHALLENGE_BIND_SESSION` on with a verifier that ignores it (Sentinel, null) |
 | `altcha.W014` | `ALTCHA_WIDGET_DEFAULTS` has keys that are not `<altcha-widget>` attributes |
 | `altcha.W015` | challenge endpoint disabled while its URL is still wired (route 404s) |

@@ -46,16 +46,32 @@ result.classification, result.score, result.verification_data
 
 ## Field binding (`fieldsHash`)
 
-When Sentinel signs specific form fields it returns a `fieldsHash`. To enforce it,
-list those fields and use `AltchaMixin`:
+Off by default, since Sentinel's default setup classifies no fields. With the
+spam filter enabled, the widget sends the form's text fields to Sentinel for
+classification, and Sentinel signs their names (`fields`) and a hash of their
+values (`fieldsHash`). Binding those fields makes sure the submitted values are
+the ones that were classified:
 
 ```python
+ALTCHA_SENTINEL_SPAMFILTER = True      # widget sends fields to Sentinel /v1/verify
+ALTCHA_SENTINEL_VERIFY_FIELDS = True   # enforce fieldsHash for bound fields
+
 class ContactForm(AltchaMixin, forms.Form):
-    email = forms.EmailField()
-    captcha = AltchaField(bind_form_fields=["email"])
+    message = forms.CharField(widget=forms.Textarea)
+    captcha = AltchaField(bind_form_fields=["message"])
 ```
 
-A tampered field after verification → `code="fields_hash_mismatch"`.
+Every bound field submitted with a non-empty value must be covered by the signed
+hash; otherwise the submission fails with `code="fields_hash_mismatch"`. That
+covers a value changed after verification, and a payload obtained without sending
+the field for classification at all (no `fieldsHash`, or the field missing from
+`fields`). Empty bound fields are exempt, as the widget never sends them.
+
+The widget only collects `<input type="text">` and `<textarea>` elements with a
+value and without `data-no-spamfilter`. Bind only fields rendered that way:
+an `EmailField` renders `type="email"`, is never classified, and would fail every
+non-empty submission. With `ALTCHA_SENTINEL_VERIFY_FIELDS = False` (the default),
+`bind_form_fields` has no effect.
 
 ## Same-origin challenge proxy
 

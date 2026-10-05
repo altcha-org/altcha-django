@@ -86,7 +86,7 @@ success; only test-mode results and the `null` verifier are exempt.
 | `ALTCHA_SENTINEL_MODE` | `"local"` | `local` / `remote` |
 | `ALTCHA_SENTINEL_MIN_SCORE` | `None` |
 | `ALTCHA_SENTINEL_REJECT_CLASSIFICATIONS` | `["BAD"]` |
-| `ALTCHA_SENTINEL_VERIFY_FIELDS` | `True` |
+| `ALTCHA_SENTINEL_VERIFY_FIELDS` | `False` — enforce `fieldsHash` for bound fields |
 | `ALTCHA_SENTINEL_SPAMFILTER` | `False` |
 | `ALTCHA_SENTINEL_PROXY_CHALLENGE` | `False` |
 | `ALTCHA_SENTINEL_TIMEOUT` | `10.0` |

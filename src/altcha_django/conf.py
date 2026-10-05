@@ -79,7 +79,7 @@ DEFAULTS: dict[str, Any] = {
     "SENTINEL_MODE": "local",  # local | remote
     "SENTINEL_MIN_SCORE": None,
     "SENTINEL_REJECT_CLASSIFICATIONS": ["BAD"],
-    "SENTINEL_VERIFY_FIELDS": True,
+    "SENTINEL_VERIFY_FIELDS": False,
     "SENTINEL_SPAMFILTER": False,
     "SENTINEL_PROXY_CHALLENGE": False,
     "SENTINEL_TIMEOUT": 10.0,

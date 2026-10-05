@@ -287,22 +287,48 @@ class SentinelVerifier(BaseVerifier):
         if self.min_score is not None and (score is None or score < self.min_score):
             return VerificationResult.failure(ErrorCode.SCORE_REJECTED, **common)
 
-        fields_hash = vd.get("fieldsHash")
-        if self.verify_fields and fields_hash:
-            if form_data is None:
+        if self.verify_fields:
+            error = self._fields_binding_error(vd, form_data, hash_algorithm)
+            if error is not None:
                 return VerificationResult.failure(
-                    ErrorCode.FIELDS_HASH_MISMATCH,
-                    error="fieldsHash present but no form data was bound; use "
-                    "AltchaMixin and AltchaField(bind_form_fields=[...])",
-                    **common,
+                    ErrorCode.FIELDS_HASH_MISMATCH, error=error, **common
                 )
-            fields = [str(f) for f in (vd.get("fields") or [])]
-            values = {name: str(form_data.get(name, "")) for name in fields}
-            algorithm = hash_algorithm if hash_algorithm in _HASH_ALGORITHMS else "SHA-256"
-            if not verify_fields_hash(values, fields, str(fields_hash), _algo(algorithm)):
-                return VerificationResult.failure(ErrorCode.FIELDS_HASH_MISMATCH, **common)
 
         return VerificationResult.success(**common)
+
+    def _fields_binding_error(
+        self, vd: Mapping[str, Any], form_data: Mapping[str, Any] | None, hash_algorithm: str
+    ) -> str | None:
+        """Why the submitted fields are not the ones Sentinel classified, or ``None``.
+
+        ``fields`` / ``fieldsHash`` are whatever the client sent to Sentinel, so their
+        absence proves nothing: every bound field that was submitted non-empty must be
+        covered by the signed hash. Empty values are exempt because the widget never
+        sends them for classification.
+        """
+        fields_hash = vd.get("fieldsHash")
+        if form_data is None:
+            if not fields_hash:
+                return None
+            return (
+                "fieldsHash present but no form data was bound; use "
+                "AltchaMixin and AltchaField(bind_form_fields=[...])"
+            )
+        fields = [str(f) for f in (vd.get("fields") or [])]
+        submitted = [name for name, value in form_data.items() if value not in (None, "")]
+        unsigned = [name for name in submitted if name not in fields]
+        if unsigned and not fields_hash:
+            hint = "" if self.spamfilter else " (ALTCHA_SENTINEL_SPAMFILTER is off)"
+            return f"no fieldsHash; bound fields were not classified{hint}: {', '.join(unsigned)}"
+        if unsigned:
+            return f"bound fields missing from the signed fields: {', '.join(unsigned)}"
+        if not fields_hash:
+            return None
+        values = {name: str(form_data.get(name, "")) for name in fields}
+        algorithm = hash_algorithm if hash_algorithm in _HASH_ALGORITHMS else "SHA-256"
+        if not verify_fields_hash(values, fields, str(fields_hash), _algo(algorithm)):
+            return "fieldsHash does not match the submitted values"
+        return None
 
 
 def _resolve_callable(value: str | Callable[..., Any] | None) -> Callable[..., Any] | None:

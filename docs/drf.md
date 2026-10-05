@@ -9,9 +9,12 @@ from rest_framework import serializers
 from altcha_django.contrib.rest_framework import AltchaField
 
 class ContactSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    altcha = AltchaField(bind_fields=["email"])   # bind_fields -> Sentinel fieldsHash
+    message = serializers.CharField()
+    altcha = AltchaField(bind_fields=["message"])   # bind_fields -> Sentinel fieldsHash
 ```
+
+`bind_fields` follows the same rules as `bind_form_fields`; see
+[Field binding](sentinel.md#field-binding-fieldshash).
 
 Pass the request in the serializer context so request-aware backends work:
 
