@@ -232,17 +232,22 @@ class SentinelVerifier(BaseVerifier):
         form_data: Mapping[str, Any] | None,
         replay_id: str | None,
     ) -> VerificationResult:
-        result = verify_server(
-            payload,
-            self.verify_url,
-            secret=self.api_secret,
-            timeout=self.timeout,
-            retries=self.retries,
-            http_post=self.http_post,
-        )
+        try:
+            result = verify_server(
+                payload,
+                self.verify_url,
+                secret=self.api_secret,
+                timeout=self.timeout,
+                retries=self.retries,
+                http_post=self.http_post,
+            )
+        except (ValueError, AttributeError, TypeError) as exc:
+            # verify_server parses 2xx and 400 bodies without checking their shape: a
+            # non-JSON body or a JSON non-object raises instead of returning a result.
+            return _invalid_response(f"{type(exc).__name__}: {exc}")
+        reason = None if result.reason is None else str(result.reason)
         if not result.verified:
-            reason = (result.reason or "").upper()
-            if reason == "PAYLOAD_ALREADY_USED":
+            if reason and reason.upper() == "PAYLOAD_ALREADY_USED":
                 code = ErrorCode.REPLAYED
             elif result.verification_data:
                 # Sentinel returned a verdict (e.g. spam) rather than a transport error.
@@ -251,15 +256,21 @@ class SentinelVerifier(BaseVerifier):
                 # HTTP 4xx/5xx, network exception, NETWORK_ERROR, empty body, …
                 code = ErrorCode.BACKEND_ERROR
             return VerificationResult.failure(
-                code, error=result.reason, payload_type=PayloadType.SENTINEL_REMOTE
+                code, error=reason, payload_type=PayloadType.SENTINEL_REMOTE
             )
         # Sentinel has verified the submitted payload's signature, so its signed id is
         # authoritative; the response's verificationData was already type-coerced.
         vd = result.verification_data
         if isinstance(vd, str):
-            vd = parse_verification_data(vd) or {}
+            vd = parse_verification_data(vd)
+        if vd is None:
+            vd = {}
+        if not isinstance(vd, Mapping):
+            return _invalid_response(
+                f"verificationData has type {type(vd).__name__}, expected an object"
+            )
         return self._finish(
-            vd or {},
+            vd,
             form_data,
             PayloadType.SENTINEL_REMOTE,
             replay_id=replay_id,
@@ -399,3 +410,11 @@ def _effective_expiry(vd: Mapping[str, Any]) -> int | None:
     if issued is not None:
         return issued + int(conf.REPLAY_FALLBACK_TTL)
     return None
+
+
+def _invalid_response(detail: str) -> VerificationResult:
+    return VerificationResult.failure(
+        ErrorCode.BACKEND_ERROR,
+        error=f"invalid response from Sentinel ({detail})",
+        payload_type=PayloadType.SENTINEL_REMOTE,
+    )

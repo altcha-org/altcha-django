@@ -172,6 +172,33 @@ def test_remote_transport_error():
     assert result.code == ErrorCode.BACKEND_ERROR.value
 
 
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (200, b"<html>gateway</html>"),
+        (200, b"[1]"),
+        (200, b'"ok"'),
+        (200, b"\xff\xfe"),
+        (400, b"[1]"),
+        (200, b'{"verified": true, "verificationData": [1]}'),
+        (200, b'{"verified": true, "verificationData": 5}'),
+    ],
+)
+def test_remote_malformed_response_is_backend_error(status, body):
+    """A proxy page or broken Sentinel must not raise out of form validation."""
+    v = make_verifier(mode="remote", http_post=lambda *a: (status, body))
+    result = v.verify(factories.make_sentinel_payload(SECRET))
+    assert not result.verified
+    assert result.code == ErrorCode.BACKEND_ERROR.value
+
+
+def test_remote_non_string_reason_is_reported():
+    v = make_verifier(mode="remote", http_post=_fake_post({"error": 5}, status=400))
+    result = v.verify(factories.make_sentinel_payload(SECRET))
+    assert result.code == ErrorCode.BACKEND_ERROR.value
+    assert result.error == "5"
+
+
 # --- config --------------------------------------------------------------
 def test_widget_challenge_ref_is_the_full_url():
     assert make_verifier().get_widget_challenge_ref() == CHALLENGE_URL
